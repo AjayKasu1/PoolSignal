@@ -1,0 +1,2 @@
+# Required only for authenticated reviewer writes. Never commit the real value.
+REVIEWER_TOKEN=replace-with-a-long-random-secret

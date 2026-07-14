@@ -7,8 +7,10 @@ import {
   reviewCases,
   type ReviewCase,
 } from "../lib/demo-data";
+import type { AgentRunResult } from "../lib/agent-engine";
 
 type View = "overview" | "agents" | "queue" | "campaign" | "scenario" | "quality";
+type QueueSort = "priority" | "newest" | "identity";
 
 const navItems: { id: View; label: string; glyph: string }[] = [
   { id: "overview", label: "Mission control", glyph: "◈" },
@@ -42,6 +44,14 @@ export function PoolSignalApp() {
   const [selectedId, setSelectedId] = useState(reviewCases[0].id);
   const [running, setRunning] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [persistedDecisions, setPersistedDecisions] = useState<Record<string, boolean>>({});
+  const [decisionMessages, setDecisionMessages] = useState<Record<string, string>>({});
+  const [reviewerToken, setReviewerToken] = useState("");
+  const [agentRun, setAgentRun] = useState<AgentRunResult | null>(null);
+  const [agentError, setAgentError] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [queueSort, setQueueSort] = useState<QueueSort>("priority");
   const [annualUnits, setAnnualUnits] = useState(250000);
   const [fee, setFee] = useState(0.25);
   const [discount, setDiscount] = useState(10);
@@ -50,32 +60,80 @@ export function PoolSignalApp() {
   const royaltyUnits = Math.max(annualUnits - 25000, 0);
   const illustrativeRoyalty = royaltyUnits * fee * (1 - discount / 100);
   const activeCases = useMemo(() => reviewCases.filter((item) => item.stage === "review"), []);
+  const activeTrace = agentRun?.caseId === selected.id ? agentRun.trace : selected.trace;
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return reviewCases;
+    return reviewCases.filter((item) => [item.brand, item.product, item.qiId, item.partNumber, item.productType]
+      .some((value) => value.toLowerCase().includes(query)));
+  }, [searchQuery]);
+  const queueCases = useMemo(() => {
+    const cases = [...reviewCases];
+    if (queueSort === "newest") {
+      return cases.sort((left, right) => right.certificationDate.localeCompare(left.certificationDate));
+    }
+    if (queueSort === "identity") {
+      return cases.sort((left, right) => left.matchConfidence - right.matchConfidence);
+    }
+    return cases.sort((left, right) => right.score - left.score);
+  }, [queueSort]);
 
-  function runAgents() {
+  async function runAgents() {
     setRunning(true);
-    window.setTimeout(() => setRunning(false), 1450);
+    setAgentError("");
+    try {
+      const response = await fetch("/api/agent-runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseId: selected.id }),
+      });
+      const payload = await response.json() as { run?: AgentRunResult; error?: string };
+      if (!response.ok || !payload.run) throw new Error(payload.error ?? "Agent cycle failed");
+      setAgentRun(payload.run);
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : "Agent cycle failed");
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function recordDecision(decision: "approved" | "returned" | "monitor") {
-    setDecisions((current) => ({ ...current, [selected.id]: decision }));
+    if (!reviewerToken.trim()) {
+      setDecisions((current) => ({ ...current, [selected.id]: decision }));
+      setPersistedDecisions((current) => ({ ...current, [selected.id]: false }));
+      setDecisionMessages((current) => ({ ...current, [selected.id]: "Previewed locally — no database write" }));
+      return;
+    }
+
+    setDecisionMessages((current) => ({ ...current, [selected.id]: "Saving authenticated decision…" }));
     try {
-      await fetch("/api/reviews", {
+      const response = await fetch("/api/reviews", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${reviewerToken.trim()}` },
         body: JSON.stringify({
           caseId: selected.id,
-          qiId: selected.qiId,
-          brand: selected.brand,
-          productName: selected.product,
-          priority: selected.score,
-          publicListMatch: selected.matchState,
           decision,
-          rationale: "Portfolio demonstration decision",
+          rationale: "Authenticated portfolio-review decision",
         }),
       });
-    } catch {
-      // The deployed database is progressive enhancement; the demo remains usable offline.
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Decision was not saved");
+      setDecisions((current) => ({ ...current, [selected.id]: decision }));
+      setPersistedDecisions((current) => ({ ...current, [selected.id]: true }));
+      setDecisionMessages((current) => ({ ...current, [selected.id]: "Persisted to D1 as an authenticated reviewer" }));
+    } catch (error) {
+      setDecisionMessages((current) => ({
+        ...current,
+        [selected.id]: error instanceof Error ? error.message : "Decision was not saved",
+      }));
     }
+  }
+
+  function openSearchResult(caseId: string) {
+    setSelectedId(caseId);
+    setView("queue");
+    setSearchOpen(false);
+    setSearchQuery("");
   }
 
   return (
@@ -103,7 +161,7 @@ export function PoolSignalApp() {
 
         <div className="sidebar-card">
           <span className="live-dot" />
-          <div><strong>Evidence graph live</strong><span>Last refresh 09:42 ET</span></div>
+          <div><strong>Agent API ready</strong><span>Run on demand · no outreach</span></div>
         </div>
         <div className="sidebar-footer"><span>Demo environment</span><strong>Public + synthetic data</strong></div>
       </aside>
@@ -115,12 +173,22 @@ export function PoolSignalApp() {
             <h1>{navItems.find((item) => item.id === view)?.label}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="quiet-button" type="button"><span>⌕</span> Search evidence</button>
+            <button className="quiet-button" type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}><span>⌕</span> Search evidence</button>
             <button className={running ? "run-button running" : "run-button"} type="button" onClick={runAgents}>
-              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : "Run intelligence cycle"}
+              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : "Run verified cycle"}
             </button>
           </div>
         </header>
+
+        {searchOpen && (
+          <section className="search-panel" aria-label="Evidence search">
+            <div className="search-input-wrap"><span>⌕</span><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search brand, Qi ID, product, or part number" aria-label="Search evidence" /><button type="button" onClick={() => setSearchOpen(false)}>Close</button></div>
+            <div className="search-results">
+              {searchMatches.length === 0 && <p>No evidence records match this search.</p>}
+              {searchMatches.map((item) => <button type="button" key={item.id} onClick={() => openSearchResult(item.id)}><span><strong>{item.brand}</strong><em>{item.product}</em></span><span><strong>{item.qiId}</strong><em>{item.matchConfidence}% entity confidence</em></span></button>)}
+            </div>
+          </section>
+        )}
 
         {view === "overview" && (
           <div className="view-stack">
@@ -152,7 +220,7 @@ export function PoolSignalApp() {
               <section className="panel agent-panel">
                 <div className="panel-heading"><div><span>AGENT FABRIC</span><h3>Evidence-to-decision trace</h3></div><button type="button" onClick={() => setView("agents")}>View run log</button></div>
                 <div className="agent-rail">
-                  {selected.trace.map((step, index) => (
+                  {activeTrace.map((step, index) => (
                     <div className="agent-node" key={step.agent}>
                       <span className={`agent-orb ${step.status}`}>{index + 1}</span>
                       <div><strong>{step.agent}</strong><span>{step.task}</span></div>
@@ -194,8 +262,8 @@ export function PoolSignalApp() {
           <div className="queue-layout">
             <section className="panel queue-list">
               <div className="panel-heading"><div><span>HUMAN-IN-THE-LOOP</span><h3>Review queue</h3></div><em>{activeCases.length} active</em></div>
-              <div className="queue-filters"><button className="active" type="button">Priority</button><button type="button">Newest</button><button type="button">Identity gaps</button></div>
-              {reviewCases.map((item) => (
+              <div className="queue-filters"><button className={queueSort === "priority" ? "active" : ""} type="button" onClick={() => setQueueSort("priority")}>Priority</button><button className={queueSort === "newest" ? "active" : ""} type="button" onClick={() => setQueueSort("newest")}>Newest</button><button className={queueSort === "identity" ? "active" : ""} type="button" onClick={() => setQueueSort("identity")}>Identity gaps</button></div>
+              {queueCases.map((item) => (
                 <button key={item.id} type="button" className={selected.id === item.id ? "queue-card selected" : "queue-card"} onClick={() => setSelectedId(item.id)}>
                   <span className="queue-score">{item.score}</span>
                   <div><strong>{item.brand}</strong><span>{item.product}</span><em>{item.qiId} · {item.signalAge}</em></div>
@@ -210,19 +278,20 @@ export function PoolSignalApp() {
               <div className="brief-block"><span>AGENT BRIEF</span><p>The monitored source shows a certified <strong>{selected.productType} product</strong> associated with {selected.brand}. {selected.evidence[1]} The entity-resolution result is <strong>{selected.matchConfidence}% confidence</strong>. Because product certification, public-list membership, and license coverage are distinct facts, the system requests human research rather than asserting status.</p></div>
               <div className="evidence-columns">
                 <div><span className="section-label">EVIDENCE</span>{selected.evidence.map((item, index) => <div className="evidence-line" key={item}><span>{String(index + 1).padStart(2, "0")}</span><p>{item}</p></div>)}</div>
-                <div><span className="section-label">AGENT TRACE</span>{selected.trace.map((step) => <div className="trace-line" key={step.agent}><i className={step.status} /><div><strong>{step.agent}</strong><p>{step.output}</p></div><em>{Math.round(step.confidence * 100)}%</em></div>)}</div>
+                <div><span className="section-label">AGENT TRACE</span>{activeTrace.map((step) => <div className="trace-line" key={step.agent}><i className={step.status} /><div><strong>{step.agent}</strong><p>{step.output}</p></div><em>{Math.round(step.confidence * 100)}%</em></div>)}</div>
               </div>
               <div className="caution-box"><span>!</span><div><strong>Analytical boundary</strong><p>{selected.caution}</p></div></div>
-              <div className="decision-bar"><div><span>Decision is recorded with evidence and timestamp.</span><strong>{decisions[selected.id] ? `Recorded: ${decisions[selected.id]}` : "Awaiting reviewer"}</strong></div><button type="button" className="return" onClick={() => recordDecision("returned")}>Return for research</button><button type="button" className="monitor" onClick={() => recordDecision("monitor")}>Monitor</button><button type="button" className="approve" onClick={() => recordDecision("approved")}>Approve entity link</button></div>
+              <div className="reviewer-access"><div><strong>Reviewer write access</strong><span>Public visitors can preview decisions locally. A private key is required for durable D1 writes.</span></div><input type="password" autoComplete="off" value={reviewerToken} onChange={(event) => setReviewerToken(event.target.value)} placeholder="Optional reviewer key" aria-label="Reviewer access key" /></div>
+              <div className="decision-bar"><div><span>{decisionMessages[selected.id] ?? "No decision has been written."}</span><strong>{decisions[selected.id] ? `${persistedDecisions[selected.id] ? "Recorded" : "Previewed"}: ${decisions[selected.id]}` : "Awaiting reviewer"}</strong></div><button type="button" className="return" onClick={() => recordDecision("returned")}>{reviewerToken.trim() ? "Return for research" : "Preview return"}</button><button type="button" className="monitor" onClick={() => recordDecision("monitor")}>{reviewerToken.trim() ? "Monitor" : "Preview monitor"}</button><button type="button" className="approve" onClick={() => recordDecision("approved")}>{reviewerToken.trim() ? "Approve entity link" : "Preview approval"}</button></div>
             </section>
           </div>
         )}
 
         {view === "agents" && (
           <div className="view-stack">
-            <section className="agent-hero panel"><div><span className="eyebrow">BOUNDED MULTI-AGENT SYSTEM</span><h2>Autonomy with an audit trail.</h2><p>Five specialist agents transform source signals into a reviewable case. Every handoff has a typed contract, confidence, evidence references, and an abstention path.</p></div><button className={running ? "run-button running" : "run-button"} onClick={runAgents} type="button">{running ? "Running trace…" : "Replay selected case"}</button></section>
+            <section className="agent-hero panel"><div><span className="eyebrow">BOUNDED MULTI-AGENT SYSTEM</span><h2>Autonomy with an audit trail.</h2><p>Five server-side specialist agents transform source signals into a reviewable case. Every handoff has a typed contract, confidence, evidence references, and an abstention path.</p>{agentRun?.caseId === selected.id && <em className="run-proof">Verified server run · {agentRun.runId.slice(0, 8)} · {agentRun.reviewPriority}/100 priority · {agentRun.requiresHuman ? "human gate engaged" : "monitoring permitted"}</em>}{agentError && <em className="run-error">{agentError}</em>}</div><button className={running ? "run-button running" : "run-button"} onClick={runAgents} type="button">{running ? "Running trace…" : "Run selected case"}</button></section>
             <section className="agent-map panel">
-              {selected.trace.map((step, index) => <article key={step.agent}><span>{String(index + 1).padStart(2, "0")}</span><div><em>{step.status}</em><h3>{step.agent}</h3><p>{step.output}</p></div><strong>{Math.round(step.confidence * 100)}%</strong></article>)}
+              {activeTrace.map((step, index) => <article key={step.agent}><span>{String(index + 1).padStart(2, "0")}</span><div><em>{step.status}</em><h3>{step.agent}</h3><p>{step.output}</p></div><strong>{Math.round(step.confidence * 100)}%</strong></article>)}
             </section>
             <div className="three-up"><article className="panel"><span>CONTRACT</span><h3>Evidence packet</h3><p>Source URI, observed fact, capture time, parser version, checksum, and confidence.</p></article><article className="panel"><span>CONTROL</span><h3>Policy-as-code</h3><p>Forbidden claims, identity threshold, stage transitions, and actions requiring approval.</p></article><article className="panel"><span>EVALUATION</span><h3>Precision before recall</h3><p>High-confidence matches are measured on a labeled set; uncertain cases explicitly abstain.</p></article></div>
           </div>
@@ -243,7 +312,7 @@ export function PoolSignalApp() {
         )}
 
         {view === "quality" && (
-          <div className="view-stack"><section className="quality-hero panel"><div><span className="eyebrow">DATA RELIABILITY</span><h2>Trust is a product feature.</h2><p>Every agent decision is downstream of source freshness, schema stability, entity evidence, and rule validation.</p></div><div className="quality-score"><strong>98.7</strong><span>health score</span></div></section><section className="quality-grid">{[{title:"Qi ID uniqueness",value:"100%",state:"pass",note:"0 duplicates"},{title:"Source freshness",value:"6h",state:"pass",note:"within 24h SLA"},{title:"Entity abstention",value:"12.4%",state:"watch",note:"expected safety behavior"},{title:"Schema drift",value:"1",state:"alert",note:"consumer-sale field changed"},{title:"Evidence links",value:"100%",state:"pass",note:"all briefs grounded"},{title:"Future dates",value:"0",state:"pass",note:"validation passed"}].map((item) => <article className="panel" key={item.title}><span className={`dq-state ${item.state}`}>{item.state}</span><h3>{item.title}</h3><strong>{item.value}</strong><p>{item.note}</p></article>)}</section><section className="panel dq-log"><div className="panel-heading"><div><span>CONTROL LOG</span><h3>Recent checks</h3></div></div><div><p><span>09:42:18</span><strong>Referential integrity</strong><em>pass · 18,442 relationships</em></p><p><span>09:42:16</span><strong>Source schema contract</strong><em className="warn">watch · 1 additive field</em></p><p><span>09:42:12</span><strong>Public-list snapshot diff</strong><em>pass · 2 changes queued</em></p><p><span>09:42:09</span><strong>Entity-match evaluation</strong><em>pass · precision 93.4%</em></p></div></section></div>
+          <div className="view-stack"><section className="quality-hero panel"><div><span className="eyebrow">SYNTHETIC CONTROL SNAPSHOT</span><h2>Trust is a product feature.</h2><p>This portfolio snapshot demonstrates how source freshness, schema stability, entity evidence, and rule validation would be monitored in production.</p></div><div className="quality-score"><strong>98.7</strong><span>illustrative health</span></div></section><section className="quality-grid">{[{title:"Qi ID uniqueness",value:"100%",state:"pass",note:"0 duplicates"},{title:"Source freshness",value:"6h",state:"pass",note:"within 24h SLA"},{title:"Entity abstention",value:"12.4%",state:"watch",note:"expected safety behavior"},{title:"Schema drift",value:"1",state:"alert",note:"consumer-sale field changed"},{title:"Evidence links",value:"100%",state:"pass",note:"all briefs grounded"},{title:"Future dates",value:"0",state:"pass",note:"validation passed"}].map((item) => <article className="panel" key={item.title}><span className={`dq-state ${item.state}`}>{item.state}</span><h3>{item.title}</h3><strong>{item.value}</strong><p>{item.note}</p></article>)}</section><section className="panel dq-log"><div className="panel-heading"><div><span>ILLUSTRATIVE CONTROL LOG</span><h3>Example checks</h3></div></div><div><p><span>09:42:18</span><strong>Referential integrity</strong><em>pass · 18,442 relationships</em></p><p><span>09:42:16</span><strong>Source schema contract</strong><em className="warn">watch · 1 additive field</em></p><p><span>09:42:12</span><strong>Public-list snapshot diff</strong><em>pass · 2 changes queued</em></p><p><span>09:42:09</span><strong>Entity-match evaluation</strong><em>pass · precision 93.4%</em></p></div></section></div>
         )}
       </section>
     </main>

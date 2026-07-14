@@ -1,6 +1,6 @@
 # PoolSignal
 
-![PoolSignal social preview](public/og.png)
+![PoolSignal social preview](public/og.jpg)
 
 **Evidence-first, agentic Qi licensing intelligence with a human approval boundary.**
 
@@ -15,8 +15,9 @@ The central design choice is restraint: agents can find, normalize, compare, sco
 ## What the demo includes
 
 - Polished intelligence console with mission control, agent trace, review queue, campaign flow, scenario lab, and data-quality views
-- Six-agent Python pipeline with typed findings, evidence references, transparent scoring, abstention, policy-as-code, and SQLite audit persistence
-- Cloudflare D1 schema and review-event API for durable human decisions
+- Live five-agent Worker pipeline plus a six-agent Python reference pipeline, both with typed findings, transparent scoring, abstention, and policy-as-code
+- Cloudflare D1 review-event API with server-derived case data, strict validation, and authenticated reviewer writes
+- Functional evidence search, queue sorting, server-verified agent runs, and clearly labeled local decision previews
 - PostgreSQL dimensional warehouse model and a Power BI-ready star-schema extract
 - DAX measures for review volume, confidence, human-gate rate, aging, response rate, and data freshness
 - Formula-driven Excel campaign review pack with validation, conditional formatting, source links, scenario controls, and QA checks
@@ -47,6 +48,8 @@ npm run dev
 
 The local portfolio opens at `http://localhost:3000`.
 
+Authenticated review writes are optional. Copy `.dev.vars.example` to `.dev.vars`, replace the placeholder with a long random `REVIEWER_TOKEN`, and enter that same value in the review queue. Without a key, decision buttons remain safe, explicitly local previews.
+
 Run the agentic reference pipeline:
 
 ```bash
@@ -70,10 +73,10 @@ npm run deploy:cloudflare
 
 The committed `wrangler.jsonc` binds the Worker to the production `DB` database. Authenticate once with `npx wrangler login` before the first deployment.
 
-Generate D1 migrations after schema changes:
+Inspect the applied D1 migrations:
 
 ```bash
-npm run db:generate
+npm run db:migrations
 ```
 
 ## Analytical artifacts
@@ -104,10 +107,12 @@ The complete talk track is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 - Source snapshots are designed to be immutable and checksummed
 - Retrieval must honor source terms, robots policies, caching, and rate limits
 - No API secrets in the repository
-- Human decisions are append-only review events
+- Public agent runs are bounded, non-persistent, and never perform outreach
+- Durable human decisions require an environment-managed reviewer secret and create append-only review events
+- HTTPS redirection, CSP, HSTS, clickjacking protection, restrictive permissions policy, and content-type hardening
 - Model output is advisory and constrained by policy-as-code
 
-The dependency audit currently reports a transitive PostCSS advisory inside the starter-pinned Next.js dependency. The available automated fix proposes a breaking downgrade, so it is documented rather than applied blindly. See [SECURITY.md](SECURITY.md).
+Both the full dependency audit and the production-only dependency audit report zero known vulnerabilities. See [SECURITY.md](SECURITY.md).
 
 ## Source context
 

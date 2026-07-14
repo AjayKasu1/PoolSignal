@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -20,14 +9,19 @@ export async function generateMetadata(): Promise<Metadata> {
   const origin = `${protocol}://${host}`;
   const title = "PoolSignal — Qi Licensing Intelligence";
   const description = "An evidence-first, agentic licensing intelligence and campaign operations platform.";
-  const socialImage = `${origin}/og.png`;
+  const socialImage = `${origin}/og.jpg`;
 
   return {
     title,
     description,
-    icons: { icon: socialImage, shortcut: socialImage },
-    openGraph: { title, description, type: "website", url: origin, images: [{ url: socialImage, width: 1536, height: 1024, alt: "PoolSignal — Evidence before action" }] },
+    applicationName: "PoolSignal",
+    alternates: { canonical: origin },
+    category: "technology",
+    icons: { icon: [{ url: "/favicon.png", type: "image/png", sizes: "64x64" }], shortcut: "/favicon.ico" },
+    manifest: "/manifest.webmanifest",
+    openGraph: { title, description, type: "website", url: origin, siteName: "PoolSignal", images: [{ url: socialImage, width: 1200, height: 800, alt: "PoolSignal — Evidence before action" }] },
     twitter: { card: "summary_large_image", title, description, images: [socialImage] },
+    robots: { index: true, follow: true },
   };
 }
 
@@ -38,9 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

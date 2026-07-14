@@ -7,12 +7,15 @@ PoolSignal is a portfolio demonstration using representative public records and 
 - No external outreach capability
 - Policy-gated identity decisions
 - D1 prepared statements through Drizzle
-- Input validation on review events
+- Reviewer-token authorization before any D1 write
+- Server-derived case data, decision allowlists, body limits, and generic error responses
+- Non-persistent public agent execution with no outreach capability
+- HTTPS redirection, CSP, HSTS, clickjacking protection, and restrictive browser permissions
 - Environment-managed secrets only
 - Source-checksum and audit-event design
 
 ## Dependency audit
 
-As of 2026-07-14, `npm audit --omit=dev` reports two moderate transitive PostCSS findings through the starter-pinned Next.js dependency. The automated force fix proposes a breaking downgrade and has not been applied. Re-evaluate the pinned Sites/vinext stack before production use and adopt the upstream patched dependency when it is compatible.
+As of 2026-07-14, both `npm audit` and `npm audit --omit=dev` report zero known vulnerabilities. The lockfile pins patched PostCSS, Vite, Cloudflare Vite plugin, Wrangler, Undici, and WebSocket dependency paths.
 
 Report security concerns privately to the repository owner. Do not include sensitive data in a public issue.
