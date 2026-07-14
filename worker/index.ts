@@ -75,6 +75,25 @@ const worker = {
       }, { headers: { "Cache-Control": "public, max-age=3600" } }));
     }
 
+    const isDocumentRequest = request.method === "GET"
+      && url.pathname === "/"
+      && url.search === ""
+      && request.headers.get("accept")?.includes("text/html")
+      && !request.headers.has("RSC");
+    if (isDocumentRequest) {
+      const edgeCache = (caches as CacheStorage & { default: Cache }).default;
+      const cacheKey = new Request(url.toString(), { headers: { Accept: "text/html" } });
+      const cached = await edgeCache.match(cacheKey);
+      if (cached) return secure(cached);
+
+      const response = secure(await handler.fetch(request, env, ctx));
+      if (response.ok) {
+        response.headers.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=3600");
+        ctx.waitUntil(edgeCache.put(cacheKey, response.clone()));
+      }
+      return response;
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       const response = await handleImageOptimization(request, {

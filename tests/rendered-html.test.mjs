@@ -32,6 +32,8 @@ test("ships production metadata, persistence declaration, and no starter surface
   assert.match(worker, /Content-Security-Policy/);
   assert.match(worker, /Strict-Transport-Security/);
   assert.match(worker, /url\.protocol === "http:"/);
+  assert.match(worker, /caches as CacheStorage/);
+  assert.match(worker, /s-maxage=300/);
   const hostingConfig = JSON.parse(hosting);
   assert.equal(hostingConfig.d1, "DB");
   assert.equal(hostingConfig.r2, null);
