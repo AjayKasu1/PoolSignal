@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "poolsignal",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "poolsignal-db",
+      "database_id": "2d0cd931-d003-4eba-9299-b1563cb4bd7a",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

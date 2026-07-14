@@ -4,6 +4,10 @@
 
 **Evidence-first, agentic Qi licensing intelligence with a human approval boundary.**
 
+[**Open the live PoolSignal demo →**](https://poolsignal.ajaykasu7.workers.dev)
+
+Production is deployed directly to Cloudflare Workers with a dedicated D1 database. The public demo does not depend on ChatGPT Sites or a developer laptop remaining online.
+
 PoolSignal is a production-style portfolio project built for a licensing analytics role. It turns public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases.
 
 The central design choice is restraint: agents can find, normalize, compare, score, summarize, and recommend research. They cannot assert that a company is unlicensed, infer shipment volume from certification counts, contact a company, or advance an identity-sensitive case without a person.
@@ -56,6 +60,15 @@ Build and verify the site:
 ```bash
 npm test
 ```
+
+Deploy the verified build to Cloudflare Workers:
+
+```bash
+npx wrangler d1 migrations apply poolsignal-db --remote
+npm run deploy:cloudflare
+```
+
+The committed `wrangler.jsonc` binds the Worker to the production `DB` database. Authenticate once with `npx wrangler login` before the first deployment.
 
 Generate D1 migrations after schema changes:
 
