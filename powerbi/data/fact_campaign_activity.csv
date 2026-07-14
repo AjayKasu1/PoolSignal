@@ -1,0 +1,6 @@
+activity_id,case_id,activity_date,next_due_date,stage,activity_type,owner_name,response_state,synthetic_record,note
+1,case-hx-27167,2026-07-14,2026-07-16,entity_research,research,Analyst A,pending,true,Resolve legal identity
+2,case-geyoto-26501,2026-07-10,2026-07-15,human_review,review,Analyst B,pending,true,Confirm regional entity
+3,case-luxshare-25497,2026-07-01,2026-07-12,human_review,review,Analyst A,pending,true,Affiliate mapping is aging
+4,case-tesla-13848,2026-06-20,2026-08-20,monitor,monitor,Analyst C,not_applicable,true,Historical signal only
+5,case-convenient-12691,2026-06-10,2026-09-10,monitor,monitor,Analyst C,not_applicable,true,Public-list match and low relevance

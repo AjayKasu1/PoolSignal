@@ -1,0 +1,14 @@
+{
+  "source_id": "QI-27167",
+  "brand": "HX",
+  "product_name": "Magnetic wireless charger",
+  "part_number": "X208-PJ002-X200-CX046",
+  "product_type": "PTx",
+  "power_profile": "MPP25",
+  "load_power": 25,
+  "certification_date": "2026-06-19",
+  "may_be_sold_to_consumers": true,
+  "automotive_inline": false,
+  "subsystem": false,
+  "source_url": "https://jpsapi.wirelesspowerconsortium.com/products/qi/27167"
+}

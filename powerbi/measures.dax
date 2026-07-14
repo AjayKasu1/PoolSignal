@@ -1,0 +1,44 @@
+-- Suggested Power BI measures
+
+Active Review Cases =
+CALCULATE(
+    DISTINCTCOUNT(fact_review_case[case_id]),
+    fact_review_case[stage] = "review"
+)
+
+High Priority Cases =
+CALCULATE(
+    DISTINCTCOUNT(fact_review_case[case_id]),
+    fact_review_case[review_priority] >= 70
+)
+
+Average Entity Match Confidence =
+AVERAGE(fact_review_case[entity_match_confidence])
+
+Human Gate Rate =
+DIVIDE(
+    CALCULATE(COUNTROWS(fact_review_case), fact_review_case[requires_human] = TRUE()),
+    COUNTROWS(fact_review_case)
+)
+
+Overdue Follow Ups =
+CALCULATE(
+    COUNTROWS(fact_campaign_activity),
+    fact_campaign_activity[next_due_date] < TODAY(),
+    fact_campaign_activity[stage] <> "closed"
+)
+
+Synthetic Response Rate =
+DIVIDE(
+    CALCULATE(COUNTROWS(fact_campaign_activity), fact_campaign_activity[response_state] = "responded"),
+    CALCULATE(COUNTROWS(fact_campaign_activity), fact_campaign_activity[activity_type] = "notification")
+)
+
+Data Freshness Hours =
+DATEDIFF(MAX(fact_review_case[updated_at]), NOW(), HOUR)
+
+Priority Weighted Queue =
+SUMX(
+    FILTER(fact_review_case, fact_review_case[stage] = "review"),
+    fact_review_case[review_priority] * (1 + (1 - fact_review_case[entity_match_confidence]))
+)

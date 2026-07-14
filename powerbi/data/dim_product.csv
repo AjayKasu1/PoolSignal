@@ -1,0 +1,6 @@
+product_key,qi_id,brand,product_name,part_number,product_type,power_profile,load_power_watts
+1,QI-27167,HX,Magnetic wireless charger,X208-PJ002-X200-CX046,PTx,MPP25,25
+2,QI-26501,GEYOTO,Wireless Charger,YS1800 series,PTx,MPP25,25
+3,QI-25497,Luxshare-ICT,Wireless Phone Charger,WPC066,PTx,EPP,15
+4,QI-13848,Tesla,Wireless Phone Charger,WC5,PTx,EPP,15
+5,QI-12691,ConvenientPower,CPS4038 EVB,CPS4038,PRx,BPP,5

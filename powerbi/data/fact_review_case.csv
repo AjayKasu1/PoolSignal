@@ -1,0 +1,6 @@
+case_id,product_key,proposed_entity_key,detected_date_key,public_list_match,entity_match_confidence,review_priority,commercial_activity_score,stage,requires_human,updated_at
+case-hx-27167,1,1,20260714,none,0.34,88,84,review,true,2026-07-14T13:42:00Z
+case-geyoto-26501,2,2,20260714,possible,0.76,84,86,review,true,2026-07-14T13:42:00Z
+case-luxshare-25497,3,3,20260714,possible,0.81,78,82,review,true,2026-07-14T13:42:00Z
+case-tesla-13848,4,4,20260714,none,0.99,62,68,monitor,true,2026-07-14T13:42:00Z
+case-convenient-12691,5,5,20260714,public-list,0.97,29,24,monitor,false,2026-07-14T13:42:00Z
