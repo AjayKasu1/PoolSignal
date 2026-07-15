@@ -48,4 +48,7 @@ test("GitHub OIDC verifier accepts only the scheduled PoolSignal workflow identi
 
   const wrongAudience = await signedToken({ aud: "another-service" });
   assert.equal(await verifyGitHubActionsOidc(wrongAudience.token, wrongAudience.fetcher, new Date("2026-07-15T22:00:00Z")), false);
+
+  const wrongEvent = await signedToken({ event_name: "pull_request" });
+  assert.equal(await verifyGitHubActionsOidc(wrongEvent.token, wrongEvent.fetcher, new Date("2026-07-15T22:00:00Z")), false);
 });

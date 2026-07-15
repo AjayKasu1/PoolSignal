@@ -53,7 +53,7 @@ function claimsAreAllowed(claims: GitHubClaims, nowSeconds: number): boolean {
     && claims.repository?.toLowerCase() === EXPECTED_REPOSITORY.toLowerCase()
     && claims.ref === EXPECTED_REF
     && claims.workflow_ref?.toLowerCase() === EXPECTED_WORKFLOW_REF.toLowerCase()
-    && ["schedule", "workflow_dispatch"].includes(claims.event_name ?? "")
+    && ["push", "schedule", "workflow_dispatch"].includes(claims.event_name ?? "")
     && claims.runner_environment === "github-hosted"
     && timeIsValid;
 }
