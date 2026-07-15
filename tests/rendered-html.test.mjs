@@ -9,7 +9,7 @@ test("production build contains the PoolSignal intelligence console", async () =
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(layout, /PoolSignal — Qi Licensing Intelligence/i);
-  assert.match(app, /Agent API ready/i);
+  assert.match(app, /Live sources connected/i);
   assert.match(app, /A review-worthy signal surfaced/i);
   assert.match(app, /Run verified cycle/i);
   assert.match(app, /HUMAN REVIEW GATE/i);
@@ -68,4 +68,31 @@ test("interactive controls call real bounded APIs and label public previews hone
   assert.match(reviewRoute, /reviewerAuthorization/);
   assert.match(reviewRoute, /authenticated-reviewer/);
   assert.doesNotMatch(reviewRoute, /detail:/);
+});
+
+test("live public-source monitoring is wired to bounded APIs and scheduled snapshots", async () => {
+  const [app, liveRoute, viaRoute, liveStore, liveData, worker, wrangler, viaWorkflow, migration] = await Promise.all([
+    readFile(new URL("../app/PoolSignalApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/live-data/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/live-data/via-snapshot/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/live-store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/live-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/via-snapshot.yml", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0001_live_public_sources.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(app, /Latest WPC certifications/);
+  assert.match(app, /Live public · synthetic operations/);
+  assert.match(liveRoute, /reviewerAuthorization/);
+  assert.match(viaRoute, /verifyGitHubActionsOidc/);
+  assert.match(viaRoute, /MAX_BODY_BYTES/);
+  assert.match(liveStore, /GLEIF_API_URL/);
+  assert.match(liveData, /api\.gleif\.org/);
+  assert.match(liveData, /ajax\/products\/qi/);
+  assert.match(worker, /scheduled\(/);
+  assert.match(wrangler, /0 \*\/6 \* \* \*/);
+  assert.match(viaWorkflow, /30 10 \* \* \*/);
+  assert.match(viaWorkflow, /id-token: write/);
+  assert.match(migration, /CREATE TABLE `live_products`/);
 });

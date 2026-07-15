@@ -8,20 +8,21 @@
 
 Production is deployed directly to Cloudflare Workers with a dedicated D1 database. The public demo does not depend on ChatGPT Sites or a developer laptop remaining online.
 
-PoolSignal is a production-style portfolio project built for a licensing analytics role. It turns public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases.
+PoolSignal is a production-style portfolio project built for a licensing analytics role. It turns live public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases. The live feeds require no API key, account, or email registration.
 
 The central design choice is restraint: agents can find, normalize, compare, score, summarize, and recommend research. They cannot assert that a company is unlicensed, infer shipment volume from certification counts, contact a company, or advance an identity-sensitive case without a person.
 
 ## What the demo includes
 
 - Polished intelligence console with mission control, agent trace, review queue, campaign flow, scenario lab, and data-quality views
+- Scheduled WPC Qi monitoring every six hours, a daily Via public-list snapshot, and cached on-demand GLEIF entity enrichment
 - Live five-agent Worker pipeline plus a six-agent Python reference pipeline, both with typed findings, transparent scoring, abstention, and policy-as-code
 - Cloudflare D1 review-event API with server-derived case data, strict validation, and authenticated reviewer writes
 - Functional evidence search, queue sorting, server-verified agent runs, and clearly labeled local decision previews
 - PostgreSQL dimensional warehouse model and a Power BI-ready star-schema extract
 - DAX measures for review volume, confidence, human-gate rate, aging, response rate, and data freshness
 - Formula-driven Excel campaign review pack with validation, conditional formatting, source links, scenario controls, and QA checks
-- Representative public records and clearly marked synthetic operations; no bulk scraper and no real outreach
+- Live bounded public-source monitoring plus clearly marked synthetic operations; no real outreach
 
 ## Agent fabric
 
@@ -49,6 +50,8 @@ npm run dev
 The local portfolio opens at `http://localhost:3000`.
 
 Authenticated review writes are optional. Copy `.dev.vars.example` to `.dev.vars`, replace the placeholder with a long random `REVIEWER_TOKEN`, and enter that same value in the review queue. Without a key, decision buttons remain safe, explicitly local previews.
+
+No source credential is needed for WPC, Via, or GLEIF. WPC is refreshed by the Worker, Via by a scheduled portability workflow, and GLEIF on demand. On a new deployment, apply the migrations and run one authenticated `POST /api/live-data` WPC refresh (or wait for its schedule). The Via publisher uses a short-lived GitHub OIDC identity bound to this repository, workflow, and `main` branch—there is no stored ingestion secret.
 
 Run the agentic reference pipeline:
 
@@ -104,10 +107,10 @@ The complete talk track is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
 - Public and synthetic data only
 - No contacts, notices, responses, or external messages
-- Source snapshots are designed to be immutable and checksummed
+- Source snapshots are append-only and checksummed; conformed records retain first- and last-seen timestamps
 - Retrieval must honor source terms, robots policies, caching, and rate limits
 - No API secrets in the repository
-- Public agent runs are bounded, non-persistent, and never perform outreach
+- Public agent runs are bounded to monitored Qi records, cache GLEIF lookups, are non-persistent, and never perform outreach
 - Durable human decisions require an environment-managed reviewer secret and create append-only review events
 - HTTPS redirection, CSP, HSTS, clickjacking protection, restrictive permissions policy, and content-type hardening
 - Model output is advisory and constrained by policy-as-code

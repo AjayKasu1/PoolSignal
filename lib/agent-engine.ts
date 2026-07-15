@@ -1,4 +1,6 @@
 import type { AgentStep, ReviewCase } from "./demo-data";
+import type { LiveEntityCandidate, LiveProductSignal } from "./live-data";
+import type { ViaMatch } from "./live-store";
 
 export type AgentRunResult = {
   runId: string;
@@ -11,6 +13,10 @@ export type AgentRunResult = {
   startedAt: string;
   completedAt: string;
   persisted: false;
+  source: "demo" | "live";
+  product?: LiveProductSignal;
+  entityCandidates?: LiveEntityCandidate[];
+  publicSnapshot?: ViaMatch;
 };
 
 function daysSince(date: string, now: Date): number {
@@ -91,5 +97,6 @@ export function runAgentCycle(item: ReviewCase, now = new Date()): AgentRunResul
     startedAt,
     completedAt: new Date(now.getTime() + 12).toISOString(),
     persisted: false,
+    source: "demo",
   };
 }

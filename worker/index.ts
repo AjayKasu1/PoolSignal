@@ -1,6 +1,8 @@
-/** Cloudflare Worker entry point for the vinext-starter template. */
+/** Cloudflare Worker entry point for PoolSignal. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { ensureLiveSchema } from "../db";
+import { refreshLiveSources } from "../lib/live-store";
 
 interface Env {
   ASSETS: Fetcher;
@@ -18,6 +20,11 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+interface ScheduledController {
+  cron: string;
+  scheduledTime: number;
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -58,7 +65,7 @@ const worker = {
     }
 
     if (url.pathname === "/sitemap.xml") {
-      const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}</loc><lastmod>2026-07-14</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url></urlset>`;
+      const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}</loc><lastmod>2026-07-15</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url></urlset>`;
       return secure(new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } }));
     }
 
@@ -107,6 +114,22 @@ const worker = {
     }
 
     return secure(await handler.fetch(request, env, ctx));
+  },
+
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const sources = ["wpc" as const];
+    ctx.waitUntil((async () => {
+      try {
+        await ensureLiveSchema(env.DB);
+        await refreshLiveSources(env.DB, sources, new Date(controller.scheduledTime));
+      } catch (error) {
+        console.error("PoolSignal scheduled refresh failed", {
+          source: sources[0],
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+        throw error;
+      }
+    })());
   },
 };
 

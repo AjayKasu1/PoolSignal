@@ -1,6 +1,6 @@
 # Security and responsible disclosure
 
-PoolSignal is a portfolio demonstration using representative public records and synthetic operational data. Do not add personal contacts, confidential licensing records, production CRM exports, or API credentials.
+PoolSignal is a portfolio demonstration using live bounded public-source records and synthetic operational data. Do not add personal contacts, confidential licensing records, production CRM exports, or API credentials.
 
 ## Controls
 
@@ -8,8 +8,10 @@ PoolSignal is a portfolio demonstration using representative public records and 
 - Policy-gated identity decisions
 - D1 prepared statements through Drizzle
 - Reviewer-token authorization before any D1 write
+- Constant-time reviewer authorization plus short-lived GitHub OIDC for Via ingestion; no shared ingestion secret
 - Server-derived case data, decision allowlists, body limits, and generic error responses
-- Non-persistent public agent execution with no outreach capability
+- Upstream response-size limits, source-specific timeouts, parser contracts, and source checksums
+- Public live-agent execution restricted to monitored Qi IDs, with cached GLEIF queries and no outreach capability
 - HTTPS redirection, CSP, HSTS, clickjacking protection, and restrictive browser permissions
 - Environment-managed secrets only
 - Source-checksum and audit-event design

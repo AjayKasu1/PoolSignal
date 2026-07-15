@@ -22,7 +22,7 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 
 ## Data layers
 
-- **Raw:** immutable, dated, checksummed source snapshots.
+- **Raw:** append-only, dated, checksummed WPC and Via source snapshots.
 - **Conformed:** normalized products, entities, public-list records, and entity relationships.
 - **Intelligence:** agent findings, evidence graph, feature contributions, review priority, and briefs.
 - **Operations:** human decisions, synthetic campaign events, follow-up aging, and scenario assumptions.
@@ -38,4 +38,14 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 
 ## Deployment split
 
-The portfolio interface is deployed as a Cloudflare-compatible Sites application with D1-backed review events. The Python package contains the reproducible analytical pipeline and agent-policy reference implementation. The public demo uses representative public records and clearly marked synthetic operational data.
+The public interface is deployed directly to Cloudflare Workers with D1-backed live-source state and review events. A Worker cron refreshes WPC every six hours. A scheduled GitHub Actions portability workflow fetches Via daily and publishes its checksummed, validated snapshot through a dedicated GitHub OIDC-authenticated route, avoiding Via's TLS incompatibility with Cloudflare Worker egress without introducing a shared secret. GLEIF resolution runs on demand for a selected monitored product, applies a 20-second upstream timeout, and writes a bounded cache. The Python package contains the reproducible analytical pipeline and agent-policy reference implementation. Operational campaign, response, and quality records remain explicitly synthetic.
+
+## Live request path
+
+`WPC public feed → Worker cron → bounded validation → SHA-256 snapshot → D1`
+
+`Via public page → scheduled portability workflow → parse + checksum → authenticated ingestion → independent revalidation → atomic D1 snapshot`
+
+`selected live Qi signal → exact GLEIF query/cache → local name score → 0.85 identity gate → dated Via-name comparison → transparent priority → policy gate → human review or monitor`
+
+Manual WPC refresh is reviewer-authenticated. Via ingestion accepts only a valid short-lived identity for the exact scheduled workflow and has no review-decision authority. The public agent endpoint accepts only a Qi ID already present in the bounded monitoring table and cannot contact a company or persist an operational decision.

@@ -1,0 +1,26 @@
+name: Via public snapshot
+
+on:
+  schedule:
+    - cron: "30 10 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: via-public-snapshot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Fetch, validate, and publish Via snapshot
+        run: node --experimental-strip-types scripts/publish-via-snapshot.mjs
