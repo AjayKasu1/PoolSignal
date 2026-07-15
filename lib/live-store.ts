@@ -327,8 +327,9 @@ export async function resolveEntityWithGleif(
   observedName: string,
   now = new Date(),
 ): Promise<LiveEntityCandidate[]> {
-  const queryKey = normalizeEntityName(observedName).slice(0, 180);
-  if (!queryKey) return [];
+  const normalizedName = normalizeEntityName(observedName).slice(0, 176);
+  if (!normalizedName) return [];
+  const queryKey = `v2:${normalizedName}`;
   const cached = await db.prepare("SELECT result_json FROM entity_resolution_cache WHERE query_key = ? AND expires_at > ? LIMIT 1")
     .bind(queryKey, now.toISOString()).first<{ result_json: string }>();
   if (cached) {

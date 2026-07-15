@@ -37,6 +37,7 @@ test("Via snapshot validation rejects duplicate or undersized publications", () 
 test("entity scoring normalizes corporate suffixes but preserves ambiguity", () => {
   assert.equal(normalizeEntityName("Tesla, Inc."), "tesla");
   assert.equal(scoreEntityName("Tesla", "Tesla, Inc."), 0.98);
-  assert.ok(scoreEntityName("ConvenientPower", "ConvenientPower HK Limited") >= 0.85);
+  assert.ok(scoreEntityName("ConvenientPower", "ConvenientPower HK Limited") < 0.85);
+  assert.ok(scoreEntityName("Apple", "APPLE DEVELOPERS") < 0.85);
   assert.ok(scoreEntityName("HX", "Unrelated Holdings LLC") < 0.5);
 });

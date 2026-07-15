@@ -198,7 +198,7 @@ export function scoreEntityName(observedName: string, legalName: string): number
   const legal = normalizeEntityName(legalName);
   if (!observed || !legal) return 0;
   if (observed === legal) return 0.98;
-  if (Math.min(observed.length, legal.length) >= 5 && (observed.includes(legal) || legal.includes(observed))) return 0.9;
+  if (Math.min(observed.length, legal.length) >= 5 && (observed.includes(legal) || legal.includes(observed))) return 0.82;
 
   const observedTokens = new Set(observed.split(" "));
   const legalTokens = new Set(legal.split(" "));
