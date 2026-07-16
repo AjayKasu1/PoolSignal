@@ -224,7 +224,7 @@ export function PoolSignalApp() {
           <div className="topbar-actions">
             <button className="quiet-button" type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}><span>⌕</span> Search demo cases</button>
             <button className={running ? "run-button running" : "run-button"} disabled={running} type="button" onClick={runPrimaryCycle}>
-              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : latestLiveSignal ? "Run latest live cycle" : "Run verified demo cycle"}
+              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : latestLiveSignal ? liveRun ? "Rerun latest live cycle" : "Run latest live cycle" : "Run verified demo cycle"}
             </button>
           </div>
         </header>
@@ -251,9 +251,7 @@ export function PoolSignalApp() {
                     : `${heroSignal.brand} registered ${heroSignal.productName} as a ${heroSignal.loadPower}W ${heroSignal.powerProfile} ${heroSignal.productType} product (${heroSignal.qiId}) on ${heroSignal.certificationDate}. Run the agents to resolve entity evidence and apply the policy gate.`
                   : `${selected.brand} registered a ${selected.loadPower}W ${selected.powerProfile} ${selected.productType} product. This representative workflow stops before making a licensing conclusion.`}</p>
                 <div className="hero-actions">
-                  {heroSignal
-                    ? <button type="button" disabled={running} onClick={() => void runAgents({ qiId: heroSignal.qiId })}>{liveRun ? "Rerun verified cycle" : `Run agents on ${heroSignal.qiId}`} <span>→</span></button>
-                    : <button type="button" onClick={() => setView("queue")}>Inspect demo case <span>→</span></button>}
+                  {!heroSignal && <button type="button" onClick={() => setView("queue")}>Inspect demo case <span>→</span></button>}
                   <a href={heroSignal?.sourceUrl ?? selected.sourceUrl} target="_blank" rel="noreferrer">Open source record ↗</a>
                 </div>
                 {agentError && <em className="run-error">{agentError}</em>}

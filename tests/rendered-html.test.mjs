@@ -86,6 +86,7 @@ test("live public-source monitoring is wired to bounded APIs and scheduled snaps
   assert.match(app, /Live public · synthetic operations/);
   assert.match(app, /runPrimaryCycle/);
   assert.match(app, /LIVE AGENT RESULT/);
+  assert.doesNotMatch(app, /Run agents on/);
   assert.match(app, /SYNTHETIC REVIEW WORKFLOW/);
   assert.match(app, /ILLUSTRATIVE MARKET SIGNAL/);
   assert.doesNotMatch(app, /<strong>08<\/strong>/);
