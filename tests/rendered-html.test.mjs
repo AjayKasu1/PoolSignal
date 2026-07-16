@@ -35,12 +35,17 @@ test("ships production metadata, Cloudflare persistence, and no starter surface"
   assert.doesNotMatch(layout, /next\/font\/google|fonts\.googleapis/i);
   assert.doesNotMatch(packageJson, /react-loading-skeleton|site-creator-vinext-starter/);
   assert.match(worker, /Content-Security-Policy/);
+  assert.match(worker, /script-src-attr 'none'/);
+  assert.match(worker, /Cross-Origin-Resource-Policy/);
   assert.match(worker, /Strict-Transport-Security/);
+  assert.match(worker, /enforceApiRateLimit/);
   assert.match(worker, /url\.protocol === "http:"/);
   assert.match(worker, /caches as CacheStorage/);
   assert.match(worker, /s-maxage=300/);
   assert.match(wrangler, /"binding": "DB"/);
   assert.match(wrangler, /"database_name": "poolsignal-db"/);
+  assert.match(wrangler, /"name": "API_READ_RATE_LIMITER"/);
+  assert.match(wrangler, /"name": "API_WRITE_RATE_LIMITER"/);
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   await access(new URL("../public/og.jpg", import.meta.url));
   await access(new URL("../public/favicon.png", import.meta.url));
@@ -56,10 +61,12 @@ test("user-facing copy preserves the analytical boundary", async () => {
 });
 
 test("interactive controls call real bounded APIs and label public previews honestly", async () => {
-  const [app, agentRoute, reviewRoute] = await Promise.all([
+  const [app, agentRoute, reviewRoute, reviewerAuth, credentialSecurity] = await Promise.all([
     readFile(new URL("../app/PoolSignalApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/agent-runs/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/reviews/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/reviewer-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/credential-security.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(app, /fetch\("\/api\/agent-runs"/);
@@ -69,7 +76,12 @@ test("interactive controls call real bounded APIs and label public previews hone
   assert.match(app, /Search synthetic brand, Qi ID, product, or part number/);
   assert.match(agentRoute, /runAgentCycle/);
   assert.match(reviewRoute, /reviewerAuthorization/);
+  assert.match(reviewRoute, /export async function GET\(request: Request\)/);
+  assert.match(reviewRoute, /Reviewer reads are disabled/);
   assert.match(reviewRoute, /authenticated-reviewer/);
+  assert.match(reviewerAuth, /constantTimeEqual/);
+  assert.match(credentialSecurity, /MIN_REVIEWER_TOKEN_BYTES = 32/);
+  assert.match(credentialSecurity, /MAX_REVIEWER_TOKEN_BYTES = 256/);
   assert.doesNotMatch(reviewRoute, /detail:/);
 });
 

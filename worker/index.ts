@@ -9,6 +9,8 @@ interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   REVIEWER_TOKEN?: string;
+  API_READ_RATE_LIMITER: ApiRateLimiter;
+  API_WRITE_RATE_LIMITER: ApiRateLimiter;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -16,6 +18,10 @@ interface Env {
       };
     };
   };
+}
+
+interface ApiRateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
 interface ExecutionContext {
@@ -35,14 +41,43 @@ interface ScheduledController {
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
 const securityHeaders: Record<string, string> = {
-  "Content-Security-Policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
+  "Content-Security-Policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; manifest-src 'self'; media-src 'none'; object-src 'none'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests; worker-src 'self'",
   "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Strict-Transport-Security": "max-age=31536000",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
 };
+
+const apiJsonHeaders = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8", "X-Robots-Tag": "noindex" };
+
+async function enforceApiRateLimit(request: Request, env: Env, url: URL): Promise<Response | null> {
+  if (!url.pathname.startsWith("/api/")) return null;
+  const sensitive = url.pathname === "/api/reviews" || !["GET", "HEAD"].includes(request.method);
+  const limiter = sensitive ? env.API_WRITE_RATE_LIMITER : env.API_READ_RATE_LIMITER;
+  const clientKey = request.headers.get("cf-connecting-ip") ?? "local-or-unknown";
+
+  try {
+    const result = await limiter.limit({ key: `${url.pathname}:${clientKey}` });
+    if (result.success) return null;
+    return new Response(JSON.stringify({ error: "Too many requests; try again shortly" }), {
+      status: 429,
+      headers: { ...apiJsonHeaders, "Retry-After": "60" },
+    });
+  } catch (error) {
+    console.error("PoolSignal API rate limiter failed", {
+      path: url.pathname,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    if (!sensitive) return null;
+    return new Response(JSON.stringify({ error: "Protected API controls are temporarily unavailable" }), {
+      status: 503,
+      headers: apiJsonHeaders,
+    });
+  }
+}
 
 function secure(response: Response): Response {
   const secured = new Response(response.body, response);
@@ -59,6 +94,9 @@ const worker = {
       url.protocol = "https:";
       return secure(Response.redirect(url.toString(), 308));
     }
+
+    const rateLimited = await enforceApiRateLimit(request, env, url);
+    if (rateLimited) return secure(rateLimited);
 
     if (url.pathname === "/robots.txt") {
       const robots = `User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${url.origin}/sitemap.xml\n`;

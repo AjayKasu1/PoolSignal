@@ -7,8 +7,18 @@ import { reviewerAuthorization } from "../../../lib/reviewer-auth";
 const allowedDecisions = new Set(["approved", "returned", "monitor"]);
 const jsonHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const authorization = reviewerAuthorization(request);
+    if (!authorization.configured) {
+      return Response.json({ error: "Reviewer reads are disabled" }, { status: 503, headers: jsonHeaders });
+    }
+    if (!authorization.authorized) {
+      return Response.json({ error: "Reviewer authorization is required" }, {
+        status: 401,
+        headers: { ...jsonHeaders, "WWW-Authenticate": "Bearer realm=\"PoolSignal reviewer\"" },
+      });
+    }
     await ensureReviewSchema();
     const db = getDb();
     const events = await db.select().from(reviewEvents).orderBy(desc(reviewEvents.createdAt)).limit(50);

@@ -1,2 +1,2 @@
-# Required only for authenticated reviewer writes. Never commit the real value.
+# Required for authenticated review-event reads and writes. Use at least 32 random bytes. Never commit the real value.
 REVIEWER_TOKEN=replace-with-a-long-random-secret

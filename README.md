@@ -98,17 +98,17 @@ The [product walkthrough](docs/PRODUCT_WALKTHROUGH.md) covers source monitoring,
 
 ## Security and governance
 
-- Public and synthetic data only
-- No contacts, notices, responses, or external messages
+- Live public-source data and synthetic operational data only; no personal, confidential, or production CRM data
+- No real contact, notice, response, or outreach records and no message-sending capability
 - Source snapshots are append-only and checksummed; conformed records retain first- and last-seen timestamps
-- Every successful WPC check remains visible as a receipt with its exact time, source checksum, prior/current counts, and material-change outcome
+- Successful WPC checks are retained in D1; the eight most recent receipts display exact times, source checksums, prior/current counts, and material-change outcomes
 - Material product fields receive per-record SHA-256 fingerprints; unchanged snapshots create no agent work
 - Change events and live agent results are durable, idempotent, version-bound, retryable, and auditable
-- Retrieval must honor source terms, robots policies, caching, and rate limits
+- Retrieval uses fixed source URLs, timeouts, response-size limits, caching, and parser contracts; deployment owners remain responsible for source terms, robots policies, and rate limits
 - No API secrets in the repository
-- Direct public live reruns are disabled; scheduled change events invoke persisted live runs and never perform outreach
-- Durable human decisions require an environment-managed reviewer secret and create append-only review events
-- HTTPS redirection, CSP, HSTS, clickjacking protection, restrictive permissions policy, and content-type hardening
+- Public execution is limited to bounded synthetic cases; live agents run only from durable source-change events and never perform outreach
+- Review-event reads and durable human decisions require a rate-limited, environment-managed demo reviewer secret of at least 32 bytes; decisions create append-only review events
+- HTTPS redirection, framework-compatible CSP, HSTS, clickjacking protection, restrictive permissions policy, cross-origin resource controls, and content-type hardening
 - Model output is advisory and constrained by policy-as-code
 
 Both the full dependency audit and the production-only dependency audit report zero known vulnerabilities. See [SECURITY.md](SECURITY.md).
