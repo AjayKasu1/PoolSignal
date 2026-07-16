@@ -22,7 +22,7 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 
 ## Data layers
 
-- **Raw:** append-only, dated, checksummed WPC and Via source snapshots.
+- **Raw:** append-only, dated, checksummed WPC and Via source snapshots. Consecutive WPC snapshots are exposed as immutable check receipts with prior/current values and an exact successful-check time.
 - **Conformed:** normalized products, per-product fingerprints, entities, public-list records, and entity relationships.
 - **Change control:** immutable material-field events, processing leases, retry state, dead-letter state, and idempotency keys.
 - **Intelligence:** version-bound agent findings, evidence graph, feature contributions, review priority, and briefs.
@@ -40,6 +40,8 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 ## Deployment split
 
 The public interface is deployed directly to Cloudflare Workers with D1-backed live-source, change-event, agent-run, and review state. A Worker cron refreshes WPC every six hours, compares canonical material fields with the previous per-product SHA-256 fingerprint, emits deterministic events only for additions or updates, and processes a bounded batch automatically. A scheduled GitHub Actions portability workflow fetches Via daily and publishes its checksummed, validated snapshot through a dedicated GitHub OIDC-authenticated route, avoiding Via's TLS incompatibility with Cloudflare Worker egress without introducing a shared secret. GLEIF resolution runs only from a claimed change event, applies a 20-second upstream timeout, and writes a bounded cache. The Python package contains the reproducible analytical pipeline and agent-policy reference implementation. Operational campaign, response, and quality records remain explicitly synthetic.
+
+Mission Control reads from the newest successful D1 snapshot rather than transient polling state. Its source counts remain stable across page visits, unchanged checks, and failed refresh attempts. A newer successful check atomically becomes the displayed last-known-good state; recent successful snapshots remain available in the Change Inbox for previous-to-current comparison.
 
 ## Live request path
 

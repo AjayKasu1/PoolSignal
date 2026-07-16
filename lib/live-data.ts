@@ -94,6 +94,24 @@ export type SourceChangeEventSummary = {
   run: LiveChangeRunSummary | null;
 };
 
+export type SourceCheckReceipt = {
+  checkedAt: string;
+  outcome: "baseline" | "no_material_change" | "material_changes";
+  sourceChecksum: string;
+  previousSourceChecksum: string | null;
+  rawSourceChanged: boolean | null;
+  observedRecords: number;
+  previousObservedRecords: number | null;
+  monitoredRecords: number;
+  previousMonitoredRecords: number | null;
+  newestCertificationDate: string | null;
+  previousNewestCertificationDate: string | null;
+  rejectedRecords: number;
+  materialChanges: number;
+  addedProducts: number;
+  updatedProducts: number;
+};
+
 export type LiveChangeFeed = {
   baselineAt: string | null;
   trackedProducts: number;
@@ -106,6 +124,8 @@ export type LiveChangeFeed = {
   lastProcessedAt: string | null;
   agentVersion: string;
   policyVersion: string;
+  lastSuccessfulCheck: SourceCheckReceipt | null;
+  recentChecks: SourceCheckReceipt[];
   recent: SourceChangeEventSummary[];
 };
 

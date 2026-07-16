@@ -26,7 +26,8 @@ export async function GET(request: Request) {
       changeFeed: {
         baselineAt: null, trackedProducts: 0, pendingCount: 0, processingCount: 0,
         retryCount: 0, deadLetterCount: 0, completed30d: 0, lastDetectedAt: null,
-        lastProcessedAt: null, agentVersion: "live-agent-v1", policyVersion: "licensing-policy-v1", recent: [],
+        lastProcessedAt: null, agentVersion: "live-agent-v1", policyVersion: "licensing-policy-v1",
+        lastSuccessfulCheck: null, recentChecks: [], recent: [],
       },
     }, { status: 503, headers: jsonHeaders });
   }

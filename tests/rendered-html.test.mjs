@@ -13,6 +13,11 @@ test("production build contains the PoolSignal intelligence console", async () =
   assert.match(app, /Sources checked\. No new evidence/i);
   assert.match(app, /No new source changes/i);
   assert.match(app, /Change inbox/i);
+  assert.match(app, /WPC catalog records verified/i);
+  assert.match(app, /Via public names observed/i);
+  assert.match(app, /Successful source-check receipts/i);
+  assert.match(app, /last successful state on every visit/i);
+  assert.doesNotMatch(app, /<span>Automated change runs · 30d<\/span><strong>\{String/i);
   assert.doesNotMatch(`${app}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -89,6 +94,9 @@ test("live public-source monitoring is wired to change-driven, idempotent proces
   assert.match(app, /Latest WPC certifications/);
   assert.match(app, /Live public · synthetic operations/);
   assert.match(app, /IMMUTABLE AUDIT LEDGER/);
+  assert.match(app, /LAST-KNOWN-GOOD STATE/);
+  assert.match(liveStore, /mapSourceCheckReceipts/);
+  assert.match(liveStore, /previousSourceChecksum/);
   assert.match(app, /No new source changes/);
   assert.doesNotMatch(app, /Run latest live cycle|Rerun latest live cycle|Run agents on/);
   assert.match(app, /SYNTHETIC REVIEW WORKFLOW/);

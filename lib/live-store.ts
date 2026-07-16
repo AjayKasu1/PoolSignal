@@ -9,6 +9,7 @@ import {
   type LiveEntityCandidate,
   type LiveProductSignal,
   type ProductChangeField,
+  type SourceCheckReceipt,
   type SourceChangeEventSummary,
   normalizeEntityName,
   parseViaLicensees,
@@ -182,6 +183,8 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
   const changeStatements: D1PreparedStatement[] = [];
   const versionStatements: D1PreparedStatement[] = [];
   let changesDetected = 0;
+  let addedProducts = 0;
+  let updatedProducts = 0;
   for (const { record, fingerprint } of fingerprints) {
     const previous = previousByKey.get(record.qiId);
     const changed = !previous || previous.record_hash !== fingerprint.hash;
@@ -209,6 +212,8 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
         capturedAt,
       ));
       changesDetected += 1;
+      if (previous) updatedProducts += 1;
+      else addedProducts += 1;
     }
     versionStatements.push(db.prepare(`
       INSERT INTO source_product_versions(
@@ -271,6 +276,9 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
       maximumStoredRecords: 500,
       rejectedRecords: parsed.rejectedRecords,
       changesDetected,
+      addedProducts,
+      updatedProducts,
+      recordsCompared: fingerprints.length,
       changeDetection: "per-product-sha256-v1",
     },
   });
@@ -281,6 +289,8 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
     retainedRecords: parsed.retainedRecords.length,
     newestCertificationDate: parsed.newestCertificationDate,
     changesDetected,
+    addedProducts,
+    updatedProducts,
   };
 }
 
@@ -352,10 +362,12 @@ export async function refreshLiveSources(
 }
 
 type SnapshotRow = {
+  checksum: string;
   captured_at: string;
   record_count: number;
   retained_count: number;
   newest_record_at: string | null;
+  detail_json: string;
 };
 
 type ProductRow = {
@@ -383,6 +395,38 @@ type ChangeStatsRow = {
   last_detected_at: string | null;
   last_processed_at: string | null;
 };
+
+type WpcSnapshotDetail = {
+  rejectedRecords?: number;
+  changesDetected?: number;
+  addedProducts?: number;
+  updatedProducts?: number;
+};
+
+function mapSourceCheckReceipts(rows: SnapshotRow[], limit = 8): SourceCheckReceipt[] {
+  return rows.slice(0, limit).map((row, index) => {
+    const previous = rows[index + 1] ?? null;
+    const detail = safeJson<WpcSnapshotDetail>(row.detail_json, {});
+    const materialChanges = Number(detail.changesDetected ?? 0);
+    return {
+      checkedAt: row.captured_at,
+      outcome: materialChanges > 0 ? "material_changes" : previous ? "no_material_change" : "baseline",
+      sourceChecksum: row.checksum,
+      previousSourceChecksum: previous?.checksum ?? null,
+      rawSourceChanged: previous ? row.checksum !== previous.checksum : null,
+      observedRecords: row.record_count,
+      previousObservedRecords: previous?.record_count ?? null,
+      monitoredRecords: row.retained_count,
+      previousMonitoredRecords: previous?.retained_count ?? null,
+      newestCertificationDate: row.newest_record_at,
+      previousNewestCertificationDate: previous?.newest_record_at ?? null,
+      rejectedRecords: Number(detail.rejectedRecords ?? 0),
+      materialChanges,
+      addedProducts: Number(detail.addedProducts ?? 0),
+      updatedProducts: Number(detail.updatedProducts ?? 0),
+    };
+  });
+}
 
 function mapChangeEvent(row: ChangeEventRow): SourceChangeEventSummary | null {
   const product = safeJson<LiveProductSignal | null>(row.after_json, null);
@@ -435,9 +479,9 @@ function mapProduct(row: ProductRow): LiveProductSignal {
 export async function getLiveData(db: D1Database, limit = 8, now = new Date()): Promise<LiveDataResponse> {
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 25);
   await ensureWpcVersionBaseline(db, now);
-  const [wpcSnapshot, viaSnapshot, products, new30d, viaCount, cacheCount, versionStats, changeStats, recentChanges] = await Promise.all([
-    db.prepare("SELECT captured_at, record_count, retained_count, newest_record_at FROM source_snapshots WHERE source_name = 'wpc_qi' AND status = 'complete' ORDER BY id DESC LIMIT 1").first<SnapshotRow>(),
-    db.prepare("SELECT captured_at, record_count, retained_count, newest_record_at FROM source_snapshots WHERE source_name = 'via_qi_licensees' AND status = 'complete' ORDER BY id DESC LIMIT 1").first<SnapshotRow>(),
+  const [wpcSnapshots, viaSnapshot, products, new30d, viaCount, cacheCount, versionStats, changeStats, recentChanges] = await Promise.all([
+    db.prepare("SELECT checksum, captured_at, record_count, retained_count, newest_record_at, detail_json FROM source_snapshots WHERE source_name = 'wpc_qi' AND status = 'complete' ORDER BY id DESC LIMIT 9").all<SnapshotRow>(),
+    db.prepare("SELECT checksum, captured_at, record_count, retained_count, newest_record_at, detail_json FROM source_snapshots WHERE source_name = 'via_qi_licensees' AND status = 'complete' ORDER BY id DESC LIMIT 1").first<SnapshotRow>(),
     db.prepare("SELECT * FROM live_products ORDER BY certification_date DESC, CAST(SUBSTR(qi_id, 4) AS INTEGER) DESC LIMIT ?").bind(safeLimit).all<ProductRow>(),
     db.prepare("SELECT COUNT(*) AS count FROM live_products WHERE certification_date >= date('now', '-30 days')").first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM via_public_entities WHERE active = 1").first<{ count: number }>(),
@@ -467,6 +511,10 @@ export async function getLiveData(db: D1Database, limit = 8, now = new Date()): 
       LIMIT 12
     `).all<ChangeEventRow>(),
   ]);
+
+  const recentChecks = mapSourceCheckReceipts(wpcSnapshots.results);
+  const lastSuccessfulCheck = recentChecks[0] ?? null;
+  const wpcSnapshot = wpcSnapshots.results[0] ?? null;
 
   const status: LiveDataStatus = {
     mode: wpcSnapshot && viaSnapshot ? "live" : "warming",
@@ -503,6 +551,8 @@ export async function getLiveData(db: D1Database, limit = 8, now = new Date()): 
       lastProcessedAt: changeStats?.last_processed_at ?? null,
       agentVersion: LIVE_AGENT_VERSION,
       policyVersion: LICENSING_POLICY_VERSION,
+      lastSuccessfulCheck,
+      recentChecks,
       recent,
     },
   };

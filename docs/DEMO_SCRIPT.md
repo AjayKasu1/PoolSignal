@@ -6,7 +6,7 @@
 
 ## Mission control — 60 seconds
 
-Point to “Sources checked. No new evidence,” the 500 tracked fingerprints, and the disabled top control. Explain that the system—not the analyst—decides whether the upstream evidence changed. Open the Change Inbox and show that a repeated snapshot creates no work. Explain that additions or material updates create deterministic events that are processed once and retained with agent and policy versions.
+Point to “Sources checked. No new evidence,” the retained WPC catalog total, the 500 tracked fingerprints, the Via public-name count, and the disabled top control. Explain that these are last-known-good values: they remain visible until a newer source check succeeds. Open the Change Inbox and compare the exact timestamps, prior/current record counts, and SHA-256 digests on two successful check receipts. Show that a repeated snapshot creates no work. Explain that additions or material updates create deterministic events that are processed once and retained with agent and policy versions.
 
 ## Agent trace — 90 seconds
 

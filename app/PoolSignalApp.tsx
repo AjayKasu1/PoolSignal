@@ -50,6 +50,25 @@ function freshnessLabel(value: string | null): string {
   return hours < 48 ? `Updated ${hours}h ago` : `Updated ${Math.floor(hours / 24)}d ago`;
 }
 
+function exactUtcLabel(value: string | null): string {
+  if (!value) return "Waiting for first successful check";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
+function countComparison(previous: number | null, current: number): string {
+  return previous === null ? `Baseline → ${current.toLocaleString()}` : `${previous.toLocaleString()} → ${current.toLocaleString()}`;
+}
+
 function ScoreRing({ value, label }: { value: number; label: string }) {
   return (
     <div className="score-ring" style={{ "--score": `${value * 3.6}deg` } as React.CSSProperties}>
@@ -87,6 +106,7 @@ export function PoolSignalApp() {
   const activeCases = useMemo(() => reviewCases.filter((item) => item.stage === "review"), []);
   const latestLiveSignal = liveData?.signals[0] ?? null;
   const changeFeed = liveData?.changeFeed;
+  const lastSuccessfulCheck = changeFeed?.lastSuccessfulCheck ?? null;
   const sourceAttentionCount = (changeFeed?.pendingCount ?? 0) + (changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0);
   const sourceWorkCount = sourceAttentionCount + (changeFeed?.processingCount ?? 0);
   const latestProcessedChange = changeFeed?.recent.find((event) => event.run) ?? null;
@@ -266,15 +286,17 @@ export function PoolSignalApp() {
                   ? "PoolSignal is loading the latest WPC snapshot and durable change ledger."
                   : sourceWorkCount > 0
                     ? `PoolSignal detected product-level evidence changes after the ${freshnessLabel(liveData.status.wpc.lastSuccessAt)} WPC check. Each event is deduplicated, processed once, and retained for audit.`
-                    : `${changeFeed?.trackedProducts ?? 0} WPC product fingerprints were compared at the latest scheduled check. No material certification field changed, so no agent cycle was created.`}</p>
+                    : lastSuccessfulCheck
+                      ? `At ${exactUtcLabel(lastSuccessfulCheck.checkedAt)}, PoolSignal compared ${lastSuccessfulCheck.monitoredRecords.toLocaleString()} product fingerprints with the previous verified snapshot. The last-known-good values remain visible until a newer check succeeds.`
+                      : "PoolSignal is retaining the last successful source state while the comparison history warms up."}</p>
                 <div className="hero-actions">
                   <button type="button" onClick={() => setView("changes")}>Open change inbox <span>→</span></button>
                   {latestLiveSignal && <a href={latestLiveSignal.sourceUrl} target="_blank" rel="noreferrer">Open newest WPC record ↗</a>}
                 </div>
               </div>
               <div className="hero-score">
-                <div className="score-prompt"><div><strong>{sourceWorkCount}</strong><span>active events</span></div></div>
-                <div className="score-context"><span>Automatic control</span><strong>{changeFeed?.processingCount ? `${changeFeed.processingCount} processing now` : "Agents run only after evidence changes"}</strong></div>
+                <div className="score-prompt"><div><strong>{lastSuccessfulCheck?.observedRecords.toLocaleString() ?? "—"}</strong><span>source rows verified</span></div></div>
+                <div className="score-context"><span>Last successful source state</span><strong>{lastSuccessfulCheck ? `${lastSuccessfulCheck.monitoredRecords.toLocaleString()} fingerprints · ${exactUtcLabel(lastSuccessfulCheck.checkedAt)}` : "Waiting for first verified check"}</strong></div>
               </div>
               <div className="hero-grid" aria-hidden="true" />
             </section>
@@ -282,8 +304,8 @@ export function PoolSignalApp() {
             <section className="metric-grid">
               <article><span>Live certifications · 30d</span><strong>{liveData?.status.wpc.new30d ?? "—"}</strong><em>{freshnessLabel(liveData?.status.wpc.lastSuccessAt ?? null)}</em></article>
               <article><span>Tracked product fingerprints</span><strong>{changeFeed?.trackedProducts ?? "—"}</strong><em>SHA-256 · material fields only</em></article>
-              <article><span>Automated change runs · 30d</span><strong>{String(changeFeed?.completed30d ?? 0).padStart(2, "0")}</strong><em>durable and idempotent</em></article>
-              <article><span>Processing failures</span><strong>{String((changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0)).padStart(2, "0")}</strong><em className={(changeFeed?.deadLetterCount ?? 0) > 0 ? "coral" : ""}>{(changeFeed?.deadLetterCount ?? 0) > 0 ? "operator review required" : "retry queue clear"}</em></article>
+              <article><span>WPC catalog records verified</span><strong>{liveData?.status.wpc.totalRecords.toLocaleString() ?? "—"}</strong><em>retained from last successful check</em></article>
+              <article><span>Via public names observed</span><strong>{liveData?.status.via.licenseeCount.toLocaleString() ?? "—"}</strong><em>{freshnessLabel(liveData?.status.via.lastSuccessAt ?? null)}</em></article>
             </section>
 
             <div className="dashboard-grid">
@@ -361,9 +383,25 @@ export function PoolSignalApp() {
 
             <section className="metric-grid">
               <article><span>Tracked fingerprints</span><strong>{changeFeed?.trackedProducts ?? "—"}</strong><em>baseline {freshnessLabel(changeFeed?.baselineAt ?? null).toLowerCase()}</em></article>
-              <article><span>Pending events</span><strong>{String(changeFeed?.pendingCount ?? 0).padStart(2, "0")}</strong><em className={(changeFeed?.pendingCount ?? 0) > 0 ? "amber" : ""}>automatic processing queue</em></article>
-              <article><span>Completed · 30d</span><strong>{String(changeFeed?.completed30d ?? 0).padStart(2, "0")}</strong><em>persisted agent results</em></article>
-              <article><span>Dead-letter events</span><strong>{String(changeFeed?.deadLetterCount ?? 0).padStart(2, "0")}</strong><em className={(changeFeed?.deadLetterCount ?? 0) > 0 ? "coral" : ""}>{(changeFeed?.deadLetterCount ?? 0) > 0 ? "private retry required" : "queue healthy"}</em></article>
+              <article><span>Pending events</span><strong>{(changeFeed?.pendingCount ?? 0) > 0 ? changeFeed?.pendingCount : "Clear"}</strong><em className={(changeFeed?.pendingCount ?? 0) > 0 ? "amber" : ""}>automatic processing queue</em></article>
+              <article><span>Automated runs · 30d</span><strong>{(changeFeed?.completed30d ?? 0) > 0 ? changeFeed?.completed30d : "Ready"}</strong><em>{(changeFeed?.completed30d ?? 0) > 0 ? "persisted agent results" : "waiting for first material change"}</em></article>
+              <article><span>Failure handling</span><strong>{(changeFeed?.deadLetterCount ?? 0) > 0 ? changeFeed?.deadLetterCount : "Clear"}</strong><em className={(changeFeed?.deadLetterCount ?? 0) > 0 ? "coral" : ""}>{(changeFeed?.deadLetterCount ?? 0) > 0 ? "private retry required" : "retry and dead-letter queues healthy"}</em></article>
+            </section>
+
+            <section className="panel check-ledger">
+              <div className="panel-heading"><div><span>LAST-KNOWN-GOOD STATE</span><h3>Successful source-check receipts</h3></div><em>{changeFeed?.recentChecks.length ?? 0} immutable checks shown</em></div>
+              {!liveData && <p className="change-empty">Loading successful source checks…</p>}
+              {liveData && changeFeed?.recentChecks.length === 0 && <div className="change-empty"><strong>Waiting for the first receipt.</strong><span>The first successful WPC comparison will remain visible here until a newer successful check replaces it.</span></div>}
+              {changeFeed?.recentChecks.map((check) => (
+                <article className="check-row" key={`${check.checkedAt}:${check.sourceChecksum}`}>
+                  <div className="check-time"><span className={`check-outcome ${check.outcome}`}>{check.outcome === "material_changes" ? "Changes detected" : check.outcome === "baseline" ? "Baseline" : "Verified · unchanged"}</span><strong>{exactUtcLabel(check.checkedAt)}</strong><em>successful WPC comparison</em></div>
+                  <div className="check-value"><span>Source records</span><strong>{countComparison(check.previousObservedRecords, check.observedRecords)}</strong><em>{check.rawSourceChanged === null ? "first retained snapshot" : check.rawSourceChanged ? "raw source payload changed" : "raw source payload matched"}</em></div>
+                  <div className="check-value"><span>Fingerprints compared</span><strong>{countComparison(check.previousMonitoredRecords, check.monitoredRecords)}</strong><em>material certification fields</em></div>
+                  <div className="check-value"><span>Material changes</span><strong>{check.materialChanges > 0 ? `${check.materialChanges} found` : "None"}</strong><em>{check.addedProducts} added · {check.updatedProducts} updated</em></div>
+                  <div className="check-hash"><span>SHA-256 source receipt</span><code title={check.sourceChecksum}>{check.sourceChecksum.slice(0, 12)}…</code><em>{check.previousSourceChecksum ? `previous ${check.previousSourceChecksum.slice(0, 8)}…` : "baseline digest"}</em></div>
+                </article>
+              ))}
+              <div className="change-contract"><span>✓</span><p>The dashboard serves this last successful state on every visit. A failed or unchanged poll never resets verified values; only a newer successful source check can replace them.</p></div>
             </section>
 
             <section className="panel change-ledger">

@@ -16,6 +16,7 @@ The central design choice is restraint: agents can find, normalize, compare, sco
 
 - Polished intelligence console with mission control, a durable source-change inbox, agent trace, review queue, campaign flow, scenario lab, and data-quality views
 - Scheduled WPC Qi monitoring every six hours, a daily Via public-list snapshot, and cached on-demand GLEIF entity enrichment
+- Last-known-good dashboard semantics with immutable source-check receipts, exact timestamps, previous-to-current counts, and raw-source digests
 - Per-product SHA-256 fingerprints, material-field diffs, idempotent event keys, automatic agent processing, bounded retries, and a dead-letter state
 - Live five-agent Worker pipeline with persisted versioned runs plus a six-agent Python reference pipeline, both with typed findings, transparent scoring, abstention, and policy-as-code
 - Cloudflare D1 review-event API with server-derived case data, strict validation, and authenticated reviewer writes
@@ -93,8 +94,8 @@ npm run db:migrations
 
 ## Eight-minute interview demonstration
 
-1. Show the source monitor, 500-product fingerprint baseline, and disabled “No new source changes” control.
-2. Open the Change Inbox and explain material-field diffs, idempotency, version binding, retries, and dead-letter handling.
+1. Show the retained live-source values and disabled “No new source changes” control. Explain that only a newer successful check replaces the last-known-good state.
+2. Open the Change Inbox, compare two immutable source-check receipts, and explain material-field diffs, idempotency, version binding, retries, and dead-letter handling.
 3. Explain why the Resolver abstained on an ambiguous brand and open the evidence-to-decision trace.
 4. Show that public-list absence is labeled as a research condition, not licensing status.
 5. Approve, monitor, or return the entity proposal and explain the audit event.
@@ -109,6 +110,7 @@ The complete talk track is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 - Public and synthetic data only
 - No contacts, notices, responses, or external messages
 - Source snapshots are append-only and checksummed; conformed records retain first- and last-seen timestamps
+- Every successful WPC check remains visible as a receipt with its exact time, source checksum, prior/current counts, and material-change outcome
 - Material product fields receive per-record SHA-256 fingerprints; unchanged snapshots create no agent work
 - Change events and live agent results are durable, idempotent, version-bound, retryable, and auditable
 - Retrieval must honor source terms, robots policies, caching, and rate limits
