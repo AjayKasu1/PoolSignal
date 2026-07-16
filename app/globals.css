@@ -116,11 +116,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .hero-actions button span { color: #617086; margin-left: 16px; }
 .hero-actions a { color: #91a0b5; font-size: 10px; }
 .hero-score { justify-self: center; display: flex; align-items: center; gap: 20px; }
-.score-ring { --score: 270deg; width: 118px; height: 118px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--lime) var(--score), rgba(154,174,202,.12) 0); box-shadow: 0 0 42px rgba(186,252,84,.08); }
+.score-ring { --score: 270deg; position: relative; width: 118px; height: 118px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--lime) var(--score), rgba(154,174,202,.12) 0); box-shadow: 0 0 42px rgba(186,252,84,.08); }
 .score-ring::before { content: ""; position: absolute; width: 102px; height: 102px; border-radius: 50%; background: #0f1722; border: 1px solid rgba(255,255,255,.06); }
 .score-ring > div { position: relative; z-index: 1; display: flex; flex-direction: column; text-align: center; }
 .score-ring strong { font: 600 32px var(--font-geist-mono); letter-spacing: -.06em; }
 .score-ring span { color: var(--muted); font: 500 7px var(--font-geist-mono); text-transform: uppercase; letter-spacing: .08em; }
+.score-prompt { position: relative; width: 118px; height: 118px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(93,228,255,.38); background: radial-gradient(circle, rgba(93,228,255,.1), rgba(15,23,34,.95) 68%); box-shadow: 0 0 42px rgba(93,228,255,.08); }
+.score-prompt::before { content: ""; position: absolute; inset: 7px; border: 1px dashed rgba(93,228,255,.22); border-radius: 50%; }
+.score-prompt > div { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.score-prompt strong { color: var(--cyan); font: 650 18px var(--font-geist-mono); letter-spacing: .08em; }
+.score-prompt span { color: var(--muted); font: 500 7px var(--font-geist-mono); text-transform: uppercase; letter-spacing: .08em; }
 .score-context { max-width: 110px; display: flex; flex-direction: column; gap: 5px; }
 .score-context span { color: var(--muted); font-size: 9px; }
 .score-context strong { font-size: 10px; line-height: 1.5; font-weight: 560; }

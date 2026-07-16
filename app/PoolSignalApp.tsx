@@ -72,8 +72,13 @@ export function PoolSignalApp() {
   const royaltyUnits = Math.max(annualUnits - 25000, 0);
   const illustrativeRoyalty = royaltyUnits * fee * (1 - discount / 100);
   const activeCases = useMemo(() => reviewCases.filter((item) => item.stage === "review"), []);
+  const identitySensitiveCases = activeCases.filter((item) => item.matchConfidence < 85).length;
+  const latestLiveSignal = liveData?.signals[0] ?? null;
+  const liveRun = agentRun?.source === "live" && agentRun.product ? agentRun : null;
+  const heroSignal = liveRun?.product ?? latestLiveSignal;
   const selectedTrace = agentRun?.source === "demo" && agentRun.caseId === selected.id ? agentRun.trace : selected.trace;
   const agentTrace = agentRun?.trace ?? selected.trace;
+  const policyStep = agentTrace.find((step) => step.agent === "Policy gate");
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return reviewCases;
@@ -131,6 +136,14 @@ export function PoolSignalApp() {
   function runLiveAgents(signal: LiveProductSignal) {
     setView("agents");
     void runAgents({ qiId: signal.qiId });
+  }
+
+  function runPrimaryCycle() {
+    if (latestLiveSignal) {
+      void runAgents({ qiId: latestLiveSignal.qiId });
+      return;
+    }
+    void runAgents();
   }
 
   async function recordDecision(decision: "approved" | "returned" | "monitor") {
@@ -197,7 +210,7 @@ export function PoolSignalApp() {
 
         <div className="sidebar-card">
           <span className="live-dot" />
-          <div><strong>{liveData?.status.mode === "live" ? "Live sources connected" : "Source monitor warming"}</strong><span>{liveData?.status.wpc.lastSuccessAt ? `${liveData.status.wpc.new30d} Qi records · no outreach` : "Run on demand · no outreach"}</span></div>
+          <div><strong>{liveData?.status.mode === "live" ? "Live sources connected" : "Source monitor warming"}</strong><span>{liveData?.status.wpc.lastSuccessAt ? `${liveData.status.wpc.new30d} certifications · last 30d` : "Run on demand · no outreach"}</span></div>
         </div>
         <div className="sidebar-footer"><span>Hybrid environment</span><strong>Live public · synthetic operations</strong></div>
       </aside>
@@ -209,18 +222,18 @@ export function PoolSignalApp() {
             <h1>{navItems.find((item) => item.id === view)?.label}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="quiet-button" type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}><span>⌕</span> Search evidence</button>
-            <button className={running ? "run-button running" : "run-button"} type="button" onClick={() => void runAgents()}>
-              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : "Run verified cycle"}
+            <button className="quiet-button" type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}><span>⌕</span> Search demo cases</button>
+            <button className={running ? "run-button running" : "run-button"} disabled={running} type="button" onClick={runPrimaryCycle}>
+              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : latestLiveSignal ? "Run latest live cycle" : "Run verified demo cycle"}
             </button>
           </div>
         </header>
 
         {searchOpen && (
-          <section className="search-panel" aria-label="Evidence search">
-            <div className="search-input-wrap"><span>⌕</span><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search brand, Qi ID, product, or part number" aria-label="Search evidence" /><button type="button" onClick={() => setSearchOpen(false)}>Close</button></div>
+          <section className="search-panel" aria-label="Demo case search">
+            <div className="search-input-wrap"><span>⌕</span><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search synthetic brand, Qi ID, product, or part number" aria-label="Search demo cases" /><button type="button" onClick={() => setSearchOpen(false)}>Close</button></div>
             <div className="search-results">
-              {searchMatches.length === 0 && <p>No evidence records match this search.</p>}
+              {searchMatches.length === 0 && <p>No demo cases match this search.</p>}
               {searchMatches.map((item) => <button type="button" key={item.id} onClick={() => openSearchResult(item.id)}><span><strong>{item.brand}</strong><em>{item.product}</em></span><span><strong>{item.qiId}</strong><em>{item.matchConfidence}% entity confidence</em></span></button>)}
             </div>
           </section>
@@ -230,31 +243,42 @@ export function PoolSignalApp() {
           <div className="view-stack">
             <section className="signal-hero">
               <div className="hero-copy">
-                <span className="hero-kicker"><i /> HUMAN REVIEW GATE</span>
-                <h2>A review-worthy signal surfaced.</h2>
-                <p>{selected.brand} registered a {selected.loadPower}W {selected.powerProfile} {selected.productType} product. The system found evidence worth investigating and stopped before making a licensing conclusion.</p>
+                <span className="hero-kicker"><i /> {heroSignal ? liveRun ? `LIVE AGENT RESULT · ${liveRun.requiresHuman ? "HUMAN REVIEW GATE" : "MONITORING PERMITTED"}` : "LIVE WPC SIGNAL · READY FOR AGENTS" : "REPRESENTATIVE DEMO · HUMAN REVIEW GATE"}</span>
+                <h2>{heroSignal ? liveRun ? liveRun.requiresHuman ? "A live signal reached human review." : "A live signal cleared for monitoring." : "The newest live certification is ready." : "A representative review signal surfaced."}</h2>
+                <p>{heroSignal
+                  ? liveRun
+                    ? `${heroSignal.brand} registered ${heroSignal.productName} as a ${heroSignal.loadPower}W ${heroSignal.powerProfile} ${heroSignal.productType} product (${heroSignal.qiId}). The verified cycle ${liveRun.requiresHuman ? "stopped for human identity review" : "authorized monitoring only"} and made no licensing conclusion.`
+                    : `${heroSignal.brand} registered ${heroSignal.productName} as a ${heroSignal.loadPower}W ${heroSignal.powerProfile} ${heroSignal.productType} product (${heroSignal.qiId}) on ${heroSignal.certificationDate}. Run the agents to resolve entity evidence and apply the policy gate.`
+                  : `${selected.brand} registered a ${selected.loadPower}W ${selected.powerProfile} ${selected.productType} product. This representative workflow stops before making a licensing conclusion.`}</p>
                 <div className="hero-actions">
-                  <button type="button" onClick={() => setView("queue")}>Inspect evidence <span>→</span></button>
-                  <a href={selected.sourceUrl} target="_blank" rel="noreferrer">Open source record ↗</a>
+                  {heroSignal
+                    ? <button type="button" disabled={running} onClick={() => void runAgents({ qiId: heroSignal.qiId })}>{liveRun ? "Rerun verified cycle" : `Run agents on ${heroSignal.qiId}`} <span>→</span></button>
+                    : <button type="button" onClick={() => setView("queue")}>Inspect demo case <span>→</span></button>}
+                  <a href={heroSignal?.sourceUrl ?? selected.sourceUrl} target="_blank" rel="noreferrer">Open source record ↗</a>
                 </div>
+                {agentError && <em className="run-error">{agentError}</em>}
               </div>
               <div className="hero-score">
-                <ScoreRing value={selected.score} label="review priority" />
-                <div className="score-context"><span>Why now</span><strong>Recent · 25W · entity unresolved</strong></div>
+                {liveRun
+                  ? <ScoreRing value={liveRun.reviewPriority} label="review priority" />
+                  : heroSignal
+                    ? <div className="score-prompt"><div><strong>LIVE</strong><span>verified source</span></div></div>
+                    : <ScoreRing value={selected.score} label="demo priority" />}
+                <div className="score-context"><span>{liveRun ? "Verified result" : heroSignal ? "Next step" : "Demo rationale"}</span><strong>{liveRun && heroSignal ? `${heroSignal.certificationDate} · ${heroSignal.loadPower}W · ${liveRun.requiresHuman ? "human gate" : "monitor only"}` : heroSignal ? "Run agents to score identity and review priority" : "Representative · 25W · entity unresolved"}</strong></div>
               </div>
               <div className="hero-grid" aria-hidden="true" />
             </section>
 
             <section className="metric-grid">
               <article><span>Live certifications · 30d</span><strong>{liveData?.status.wpc.new30d ?? "—"}</strong><em>{freshnessLabel(liveData?.status.wpc.lastSuccessAt ?? null)}</em></article>
-              <article><span>Cases awaiting review</span><strong>08</strong><em className="amber">4 identity-sensitive</em></article>
-              <article><span>High-confidence matches</span><strong>93.4%</strong><em>on labeled evaluation set</em></article>
-              <article><span>Follow-ups aging</span><strong>04</strong><em className="coral">past internal target</em></article>
+              <article><span>Synthetic cases awaiting review</span><strong>{String(activeCases.length).padStart(2, "0")}</strong><em className="amber">{identitySensitiveCases} identity-sensitive</em></article>
+              <article><span>Illustrative match precision</span><strong>93.4%</strong><em>on a synthetic labeled set</em></article>
+              <article><span>Synthetic follow-ups aging</span><strong>04</strong><em className="coral">example past internal target</em></article>
             </section>
 
             <div className="dashboard-grid">
               <section className="panel agent-panel">
-                <div className="panel-heading"><div><span>AGENT FABRIC</span><h3>Evidence-to-decision trace</h3></div><button type="button" onClick={() => setView("agents")}>View run log</button></div>
+                <div className="panel-heading"><div><span>{liveRun ? "LIVE AGENT RUN" : "REPRESENTATIVE AGENT TRACE"}</span><h3>Evidence-to-decision trace</h3></div><button type="button" onClick={() => setView("agents")}>View run log</button></div>
                 <div className="agent-rail">
                   {agentTrace.map((step, index) => (
                     <div className="agent-node" key={step.agent}>
@@ -264,15 +288,15 @@ export function PoolSignalApp() {
                     </div>
                   ))}
                 </div>
-                <div className="policy-banner"><span>◆</span><div><strong>Policy gate engaged</strong><p>Identity resolution is below threshold. The system may recommend research, but cannot advance this case without a person.</p></div></div>
+                <div className="policy-banner"><span>◆</span><div><strong>{liveRun ? liveRun.requiresHuman ? "Human review required" : "Monitoring permitted" : "Representative policy gate"}</strong><p>{policyStep?.output ?? "The policy gate did not return an output."}</p></div></div>
               </section>
 
               <section className="panel trend-panel">
-                <div className="panel-heading"><div><span>MARKET SIGNAL</span><h3>Certification velocity</h3></div><em>7 months</em></div>
-                <div className="bar-chart" aria-label="Monthly certification velocity">
+                <div className="panel-heading"><div><span>ILLUSTRATIVE MARKET SIGNAL</span><h3>Representative certification velocity</h3></div><em>7 months · synthetic</em></div>
+                <div className="bar-chart" aria-label="Illustrative monthly certification velocity">
                   {certificationTrend.map((item) => <div key={item.month}><span style={{ height: `${item.value}%` }} /><em>{item.month}</em></div>)}
                 </div>
-                <div className="chart-note"><strong>June acceleration</strong><span>Certification volume reached the monitored-period high.</span></div>
+                <div className="chart-note"><strong>Representative June acceleration</strong><span>Synthetic trend shown for workflow demonstration.</span></div>
               </section>
             </div>
 
@@ -301,7 +325,7 @@ export function PoolSignalApp() {
             </section>
 
             <section className="panel queue-preview">
-              <div className="panel-heading"><div><span>PRIORITIZED REVIEW</span><h3>Cases that need judgment</h3></div><button type="button" onClick={() => setView("queue")}>Open full queue</button></div>
+              <div className="panel-heading"><div><span>SYNTHETIC REVIEW WORKFLOW</span><h3>Representative cases for judgment</h3></div><button type="button" onClick={() => setView("queue")}>Open demo queue</button></div>
               <div className="case-table" role="table" aria-label="Prioritized review cases">
                 <div className="case-row case-header" role="row"><span>Signal</span><span>Product evidence</span><span>Entity confidence</span><span>Public snapshot</span><span>Priority</span></div>
                 {reviewCases.slice(0, 4).map((item) => (

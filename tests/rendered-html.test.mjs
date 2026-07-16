@@ -10,8 +10,8 @@ test("production build contains the PoolSignal intelligence console", async () =
   ]);
   assert.match(layout, /PoolSignal — Qi Licensing Intelligence/i);
   assert.match(app, /Live sources connected/i);
-  assert.match(app, /A review-worthy signal surfaced/i);
-  assert.match(app, /Run verified cycle/i);
+  assert.match(app, /The newest live certification is ready/i);
+  assert.match(app, /Run latest live cycle/i);
   assert.match(app, /HUMAN REVIEW GATE/i);
   assert.doesNotMatch(`${app}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
@@ -63,7 +63,7 @@ test("interactive controls call real bounded APIs and label public previews hone
   assert.match(app, /Previewed locally — no database write/);
   assert.match(app, /persistedDecisions/);
   assert.match(app, /setQueueSort\("newest"\)/);
-  assert.match(app, /Search brand, Qi ID, product, or part number/);
+  assert.match(app, /Search synthetic brand, Qi ID, product, or part number/);
   assert.match(agentRoute, /runAgentCycle/);
   assert.match(reviewRoute, /reviewerAuthorization/);
   assert.match(reviewRoute, /authenticated-reviewer/);
@@ -84,6 +84,11 @@ test("live public-source monitoring is wired to bounded APIs and scheduled snaps
   ]);
   assert.match(app, /Latest WPC certifications/);
   assert.match(app, /Live public · synthetic operations/);
+  assert.match(app, /runPrimaryCycle/);
+  assert.match(app, /LIVE AGENT RESULT/);
+  assert.match(app, /SYNTHETIC REVIEW WORKFLOW/);
+  assert.match(app, /ILLUSTRATIVE MARKET SIGNAL/);
+  assert.doesNotMatch(app, /<strong>08<\/strong>/);
   assert.match(liveRoute, /reviewerAuthorization/);
   assert.match(viaRoute, /verifyGitHubActionsOidc/);
   assert.match(viaRoute, /MAX_BODY_BYTES/);
