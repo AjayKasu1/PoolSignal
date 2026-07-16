@@ -24,6 +24,6 @@ CREATE TABLE `review_events` (
 	`case_id` text NOT NULL,
 	`decision` text NOT NULL,
 	`rationale` text DEFAULT '' NOT NULL,
-	`actor` text DEFAULT 'portfolio-reviewer' NOT NULL,
+	`actor` text DEFAULT 'authenticated-reviewer' NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

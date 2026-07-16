@@ -14,7 +14,7 @@ PoolSignal ranks product signals for analyst research, proposes entity candidate
 
 ## Evaluation
 
-Entity resolution should be evaluated on a manually labeled brand-to-legal-entity set using precision, recall, F1, coverage, and abstention rate. The production acceptance criterion is precision-first: any automatic match threshold must demonstrate at least 0.95 precision on an appropriately representative holdout before it can be considered for automation. The current portfolio values are illustrative until a larger labeled set is created.
+Entity resolution should be evaluated on a manually labeled brand-to-legal-entity set using precision, recall, F1, coverage, and abstention rate. The production acceptance criterion is precision-first: any automatic match threshold must demonstrate at least 0.95 precision on an appropriately representative holdout before it can be considered for automation. The currently displayed evaluation values are illustrative until a larger labeled set is created.
 
 Briefing should be evaluated for:
 

@@ -42,7 +42,7 @@ export async function ensureReviewSchema() {
         case_id TEXT NOT NULL,
         decision TEXT NOT NULL,
         rationale TEXT DEFAULT '' NOT NULL,
-        actor TEXT DEFAULT 'portfolio-reviewer' NOT NULL,
+        actor TEXT DEFAULT 'authenticated-reviewer' NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `),

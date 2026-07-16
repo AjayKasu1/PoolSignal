@@ -8,11 +8,11 @@
 
 Production runs on Cloudflare Workers with persistent D1 storage and remains available independently of any local development environment.
 
-PoolSignal is a production-style portfolio project built for a licensing analytics role. It turns live public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases. The live feeds require no API key, account, or email registration.
+PoolSignal is a production-oriented decision-support platform for licensing-intelligence workflows. It turns live public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases. The live feeds require no API key, account, or email registration.
 
 The central design choice is restraint: agents can find, normalize, compare, score, summarize, and recommend research. They cannot assert that a company is unlicensed, infer shipment volume from certification counts, contact a company, or advance an identity-sensitive case without a person.
 
-## What the demo includes
+## What PoolSignal includes
 
 - Polished intelligence console with mission control, a durable source-change inbox, agent trace, review queue, campaign flow, scenario lab, and data-quality views
 - Scheduled WPC Qi monitoring every six hours, a daily Via public-list snapshot, and cached on-demand GLEIF entity enrichment
@@ -49,7 +49,7 @@ npm install
 npm run dev
 ```
 
-The local portfolio opens at `http://localhost:3000`.
+The local application opens at `http://localhost:3000`.
 
 Authenticated review writes are optional. Copy `.dev.vars.example` to `.dev.vars`, replace the placeholder with a long random `REVIEWER_TOKEN`, and enter that same value in the review queue. Without a key, decision buttons remain safe, explicitly local previews.
 
@@ -92,18 +92,9 @@ npm run db:migrations
 - `warehouse/schema.sql` — PostgreSQL analytical warehouse
 - `drizzle/` — D1 application-state migration
 
-## Eight-minute interview demonstration
+## Product walkthrough
 
-1. Show the retained live-source values and disabled “No new source changes” control. Explain that only a newer successful check replaces the last-known-good state.
-2. Open the Change Inbox, compare two immutable source-check receipts, and explain material-field diffs, idempotency, version binding, retries, and dead-letter handling.
-3. Explain why the Resolver abstained on an ambiguous brand and open the evidence-to-decision trace.
-4. Show that public-list absence is labeled as a research condition, not licensing status.
-5. Approve, monitor, or return the entity proposal and explain the audit event.
-6. Move to the synthetic campaign flow and identify an aging item.
-7. Adjust annual units in the scenario lab and explain every assumption.
-8. Open the data-quality view and discuss precision, abstention, and schema drift.
-
-The complete talk track is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+The [product walkthrough](docs/PRODUCT_WALKTHROUGH.md) covers source monitoring, durable change processing, agent decisions, human review, synthetic campaign operations, scenario analysis, and data-quality controls.
 
 ## Security and governance
 
@@ -128,7 +119,7 @@ Both the full dependency audit and the production-only dependency audit report z
 - Via Qi program: https://www.via-la.com/licensing-programs/qi-wireless-power/
 - GLEIF entity API: https://www.gleif.org/en/lei-data/gleif-api/
 
-This is an independent portfolio demonstration and is not affiliated with, endorsed by, or a statement on behalf of Via Licensing Alliance, Dolby Laboratories, or the Wireless Power Consortium.
+This is an independent technical demonstration and is not affiliated with, endorsed by, or a statement on behalf of Via Licensing Alliance, the Wireless Power Consortium, or GLEIF.
 
 ## License and third-party materials
 

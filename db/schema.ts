@@ -18,7 +18,7 @@ export const reviewEvents = sqliteTable("review_events", {
   caseId: text("case_id").notNull(),
   decision: text("decision").notNull(),
   rationale: text("rationale").notNull().default(""),
-  actor: text("actor").notNull().default("portfolio-reviewer"),
+  actor: text("actor").notNull().default("authenticated-reviewer"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

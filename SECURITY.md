@@ -1,6 +1,6 @@
 # Security and responsible disclosure
 
-PoolSignal is a portfolio demonstration using live bounded public-source records and synthetic operational data. Do not add personal contacts, confidential licensing records, production CRM exports, or API credentials.
+PoolSignal is a public demonstration environment using bounded public-source records and synthetic operational data. Do not add personal contacts, confidential licensing records, production CRM exports, or API credentials.
 
 ## Controls
 

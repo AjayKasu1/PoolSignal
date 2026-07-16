@@ -172,7 +172,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'portfolio-reviewer'"
+          "default": "'authenticated-reviewer'"
         },
         "created_at": {
           "name": "created_at",
