@@ -8,19 +8,32 @@ import {
   type ReviewCase,
 } from "../lib/demo-data";
 import type { AgentRunResult } from "../lib/agent-engine";
-import type { LiveDataResponse, LiveProductSignal } from "../lib/live-data";
+import type { LiveDataResponse, ProductChangeField } from "../lib/live-data";
 
-type View = "overview" | "agents" | "queue" | "campaign" | "scenario" | "quality";
+type View = "overview" | "changes" | "agents" | "queue" | "campaign" | "scenario" | "quality";
 type QueueSort = "priority" | "newest" | "identity";
 
 const navItems: { id: View; label: string; glyph: string }[] = [
   { id: "overview", label: "Mission control", glyph: "◈" },
+  { id: "changes", label: "Change inbox", glyph: "≋" },
   { id: "agents", label: "Agent fabric", glyph: "⌘" },
   { id: "queue", label: "Review queue", glyph: "◎" },
   { id: "campaign", label: "Campaign flow", glyph: "↗" },
   { id: "scenario", label: "Scenario lab", glyph: "△" },
   { id: "quality", label: "Data quality", glyph: "◇" },
 ];
+
+const changeFieldLabels: Record<ProductChangeField, string> = {
+  qiId: "Qi ID",
+  brand: "Brand",
+  productName: "Product name",
+  partNumber: "Part number",
+  productType: "Product type",
+  powerProfile: "Power profile",
+  loadPower: "Load power",
+  version: "Qi version",
+  certificationDate: "Certification date",
+};
 
 const matchCopy = {
   none: "No public-list match",
@@ -72,13 +85,25 @@ export function PoolSignalApp() {
   const royaltyUnits = Math.max(annualUnits - 25000, 0);
   const illustrativeRoyalty = royaltyUnits * fee * (1 - discount / 100);
   const activeCases = useMemo(() => reviewCases.filter((item) => item.stage === "review"), []);
-  const identitySensitiveCases = activeCases.filter((item) => item.matchConfidence < 85).length;
   const latestLiveSignal = liveData?.signals[0] ?? null;
-  const liveRun = agentRun?.source === "live" && agentRun.product ? agentRun : null;
-  const heroSignal = liveRun?.product ?? latestLiveSignal;
+  const changeFeed = liveData?.changeFeed;
+  const sourceAttentionCount = (changeFeed?.pendingCount ?? 0) + (changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0);
+  const sourceWorkCount = sourceAttentionCount + (changeFeed?.processingCount ?? 0);
+  const latestProcessedChange = changeFeed?.recent.find((event) => event.run) ?? null;
+  const latestPersistedRun = latestProcessedChange?.run ?? null;
   const selectedTrace = agentRun?.source === "demo" && agentRun.caseId === selected.id ? agentRun.trace : selected.trace;
-  const agentTrace = agentRun?.trace ?? selected.trace;
+  const agentTrace = agentRun?.trace ?? latestPersistedRun?.trace ?? selected.trace;
   const policyStep = agentTrace.find((step) => step.agent === "Policy gate");
+  const changeButtonLabel = !liveData
+    ? "Checking source changes"
+    : (changeFeed?.processingCount ?? 0) > 0
+      ? `Processing ${changeFeed?.processingCount} source changes`
+      : (changeFeed?.pendingCount ?? 0) > 0
+        ? `Review ${changeFeed?.pendingCount} new source changes`
+        : (changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0) > 0
+          ? `Inspect ${(changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0)} failed source changes`
+          : "No new source changes";
+  const changeButtonDisabled = !liveData || sourceWorkCount === 0;
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return reviewCases;
@@ -111,17 +136,21 @@ export function PoolSignalApp() {
       }
     }
     void loadLiveData();
-    return () => controller.abort();
+    const interval = window.setInterval(() => void loadLiveData(), 60_000);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
   }, []);
 
-  async function runAgents(target: { qiId?: string } = {}) {
+  async function runAgents() {
     setRunning(true);
     setAgentError("");
     try {
       const response = await fetch("/api/agent-runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target.qiId ? { qiId: target.qiId } : { caseId: selected.id }),
+        body: JSON.stringify({ caseId: selected.id }),
       });
       const payload = await response.json() as { run?: AgentRunResult; error?: string };
       if (!response.ok || !payload.run) throw new Error(payload.error ?? "Agent cycle failed");
@@ -131,19 +160,6 @@ export function PoolSignalApp() {
     } finally {
       setRunning(false);
     }
-  }
-
-  function runLiveAgents(signal: LiveProductSignal) {
-    setView("agents");
-    void runAgents({ qiId: signal.qiId });
-  }
-
-  function runPrimaryCycle() {
-    if (latestLiveSignal) {
-      void runAgents({ qiId: latestLiveSignal.qiId });
-      return;
-    }
-    void runAgents();
   }
 
   async function recordDecision(decision: "approved" | "returned" | "monitor") {
@@ -204,6 +220,7 @@ export function PoolSignalApp() {
             >
               <span>{item.glyph}</span>{item.label}
               {item.id === "queue" && <em>{activeCases.length}</em>}
+              {item.id === "changes" && sourceWorkCount > 0 && <em>{sourceWorkCount}</em>}
             </button>
           ))}
         </nav>
@@ -223,8 +240,8 @@ export function PoolSignalApp() {
           </div>
           <div className="topbar-actions">
             <button className="quiet-button" type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen((open) => !open)}><span>⌕</span> Search demo cases</button>
-            <button className={running ? "run-button running" : "run-button"} disabled={running} type="button" onClick={runPrimaryCycle}>
-              <span>{running ? "•••" : "✦"}</span>{running ? "Agents working" : latestLiveSignal ? liveRun ? "Rerun latest live cycle" : "Run latest live cycle" : "Run verified demo cycle"}
+            <button className={(changeFeed?.processingCount ?? 0) > 0 ? "run-button running" : "run-button"} disabled={changeButtonDisabled} type="button" onClick={() => setView("changes")}>
+              <span>{!liveData || (changeFeed?.processingCount ?? 0) > 0 ? "•••" : sourceWorkCount > 0 ? "◆" : "✓"}</span>{changeButtonLabel}
             </button>
           </div>
         </header>
@@ -243,40 +260,35 @@ export function PoolSignalApp() {
           <div className="view-stack">
             <section className="signal-hero">
               <div className="hero-copy">
-                <span className="hero-kicker"><i /> {heroSignal ? liveRun ? `LIVE AGENT RESULT · ${liveRun.requiresHuman ? "HUMAN REVIEW GATE" : "MONITORING PERMITTED"}` : "LIVE WPC SIGNAL · READY FOR AGENTS" : "REPRESENTATIVE DEMO · HUMAN REVIEW GATE"}</span>
-                <h2>{heroSignal ? liveRun ? liveRun.requiresHuman ? "A live signal reached human review." : "A live signal cleared for monitoring." : "The newest live certification is ready." : "A representative review signal surfaced."}</h2>
-                <p>{heroSignal
-                  ? liveRun
-                    ? `${heroSignal.brand} registered ${heroSignal.productName} as a ${heroSignal.loadPower}W ${heroSignal.powerProfile} ${heroSignal.productType} product (${heroSignal.qiId}). The verified cycle ${liveRun.requiresHuman ? "stopped for human identity review" : "authorized monitoring only"} and made no licensing conclusion.`
-                    : `${heroSignal.brand} registered ${heroSignal.productName} as a ${heroSignal.loadPower}W ${heroSignal.powerProfile} ${heroSignal.productType} product (${heroSignal.qiId}) on ${heroSignal.certificationDate}. Run the agents to resolve entity evidence and apply the policy gate.`
-                  : `${selected.brand} registered a ${selected.loadPower}W ${selected.powerProfile} ${selected.productType} product. This representative workflow stops before making a licensing conclusion.`}</p>
+                <span className="hero-kicker"><i /> {!liveData ? "SOURCE MONITOR · CHECKING" : sourceWorkCount > 0 ? "SOURCE CHANGE INBOX · ATTENTION" : "SOURCE MONITOR · CURRENT"}</span>
+                <h2>{!liveData ? "Checking for material source changes." : sourceWorkCount > 0 ? `${sourceWorkCount} source ${sourceWorkCount === 1 ? "change is" : "changes are"} active.` : "Sources checked. No new evidence."}</h2>
+                <p>{!liveData
+                  ? "PoolSignal is loading the latest WPC snapshot and durable change ledger."
+                  : sourceWorkCount > 0
+                    ? `PoolSignal detected product-level evidence changes after the ${freshnessLabel(liveData.status.wpc.lastSuccessAt)} WPC check. Each event is deduplicated, processed once, and retained for audit.`
+                    : `${changeFeed?.trackedProducts ?? 0} WPC product fingerprints were compared at the latest scheduled check. No material certification field changed, so no agent cycle was created.`}</p>
                 <div className="hero-actions">
-                  {!heroSignal && <button type="button" onClick={() => setView("queue")}>Inspect demo case <span>→</span></button>}
-                  <a href={heroSignal?.sourceUrl ?? selected.sourceUrl} target="_blank" rel="noreferrer">Open source record ↗</a>
+                  <button type="button" onClick={() => setView("changes")}>Open change inbox <span>→</span></button>
+                  {latestLiveSignal && <a href={latestLiveSignal.sourceUrl} target="_blank" rel="noreferrer">Open newest WPC record ↗</a>}
                 </div>
-                {agentError && <em className="run-error">{agentError}</em>}
               </div>
               <div className="hero-score">
-                {liveRun
-                  ? <ScoreRing value={liveRun.reviewPriority} label="review priority" />
-                  : heroSignal
-                    ? <div className="score-prompt"><div><strong>LIVE</strong><span>verified source</span></div></div>
-                    : <ScoreRing value={selected.score} label="demo priority" />}
-                <div className="score-context"><span>{liveRun ? "Verified result" : heroSignal ? "Next step" : "Demo rationale"}</span><strong>{liveRun && heroSignal ? `${heroSignal.certificationDate} · ${heroSignal.loadPower}W · ${liveRun.requiresHuman ? "human gate" : "monitor only"}` : heroSignal ? "Run agents to score identity and review priority" : "Representative · 25W · entity unresolved"}</strong></div>
+                <div className="score-prompt"><div><strong>{sourceWorkCount}</strong><span>active events</span></div></div>
+                <div className="score-context"><span>Automatic control</span><strong>{changeFeed?.processingCount ? `${changeFeed.processingCount} processing now` : "Agents run only after evidence changes"}</strong></div>
               </div>
               <div className="hero-grid" aria-hidden="true" />
             </section>
 
             <section className="metric-grid">
               <article><span>Live certifications · 30d</span><strong>{liveData?.status.wpc.new30d ?? "—"}</strong><em>{freshnessLabel(liveData?.status.wpc.lastSuccessAt ?? null)}</em></article>
-              <article><span>Synthetic cases awaiting review</span><strong>{String(activeCases.length).padStart(2, "0")}</strong><em className="amber">{identitySensitiveCases} identity-sensitive</em></article>
-              <article><span>Illustrative match precision</span><strong>93.4%</strong><em>on a synthetic labeled set</em></article>
-              <article><span>Synthetic follow-ups aging</span><strong>04</strong><em className="coral">example past internal target</em></article>
+              <article><span>Tracked product fingerprints</span><strong>{changeFeed?.trackedProducts ?? "—"}</strong><em>SHA-256 · material fields only</em></article>
+              <article><span>Automated change runs · 30d</span><strong>{String(changeFeed?.completed30d ?? 0).padStart(2, "0")}</strong><em>durable and idempotent</em></article>
+              <article><span>Processing failures</span><strong>{String((changeFeed?.retryCount ?? 0) + (changeFeed?.deadLetterCount ?? 0)).padStart(2, "0")}</strong><em className={(changeFeed?.deadLetterCount ?? 0) > 0 ? "coral" : ""}>{(changeFeed?.deadLetterCount ?? 0) > 0 ? "operator review required" : "retry queue clear"}</em></article>
             </section>
 
             <div className="dashboard-grid">
               <section className="panel agent-panel">
-                <div className="panel-heading"><div><span>{liveRun ? "LIVE AGENT RUN" : "REPRESENTATIVE AGENT TRACE"}</span><h3>Evidence-to-decision trace</h3></div><button type="button" onClick={() => setView("agents")}>View run log</button></div>
+                <div className="panel-heading"><div><span>{agentRun ? "REPRESENTATIVE AGENT TRACE" : latestPersistedRun ? "AUTOMATED LIVE CHANGE RUN" : "REPRESENTATIVE AGENT TRACE"}</span><h3>Evidence-to-decision trace</h3></div><button type="button" onClick={() => setView("agents")}>View run log</button></div>
                 <div className="agent-rail">
                   {agentTrace.map((step, index) => (
                     <div className="agent-node" key={step.agent}>
@@ -286,7 +298,7 @@ export function PoolSignalApp() {
                     </div>
                   ))}
                 </div>
-                <div className="policy-banner"><span>◆</span><div><strong>{liveRun ? liveRun.requiresHuman ? "Human review required" : "Monitoring permitted" : "Representative policy gate"}</strong><p>{policyStep?.output ?? "The policy gate did not return an output."}</p></div></div>
+                <div className="policy-banner"><span>◆</span><div><strong>{agentRun ? "Representative policy gate" : latestPersistedRun ? latestPersistedRun.requiresHuman ? "Human review required" : "Monitoring permitted" : "Representative policy gate"}</strong><p>{policyStep?.output ?? "The policy gate did not return an output."}</p></div></div>
               </section>
 
               <section className="panel trend-panel">
@@ -306,7 +318,7 @@ export function PoolSignalApp() {
                 <article><span className="source-state ondemand">GLEIF</span><strong>{liveData?.status.gleif.cachedQueries ?? 0}</strong><em>cached entity queries</em><small>searched only when agents run</small></article>
               </div>
               <div className="live-feed-table" role="table" aria-label="Latest live Qi certification signals">
-                <div className="live-feed-row live-feed-header" role="row"><span>Certified</span><span>Signal</span><span>Product</span><span>Profile</span><span>Action</span></div>
+                <div className="live-feed-row live-feed-header" role="row"><span>Certified</span><span>Signal</span><span>Product</span><span>Profile</span><span>State</span></div>
                 {!liveData && <p className="live-feed-empty">Connecting to the live public-source monitor…</p>}
                 {liveData?.signals.length === 0 && <p className="live-feed-empty">The first scheduled source snapshot is still warming up.</p>}
                 {liveData?.signals.map((signal) => (
@@ -315,11 +327,11 @@ export function PoolSignalApp() {
                     <span><strong>{signal.brand}</strong><em>{signal.qiId}</em></span>
                     <span><strong>{signal.productName}</strong><em>{signal.partNumber}</em></span>
                     <span><strong>{signal.productType} · {signal.loadPower}W</strong><em>{signal.powerProfile}</em></span>
-                    <span className="live-feed-actions"><button type="button" disabled={running} onClick={() => runLiveAgents(signal)}>Run agents</button><a href={signal.sourceUrl} target="_blank" rel="noreferrer" aria-label={`Open ${signal.qiId} at WPC`}>Source ↗</a></span>
+                    <span className="live-feed-actions"><i>Fingerprint tracked</i><a href={signal.sourceUrl} target="_blank" rel="noreferrer" aria-label={`Open ${signal.qiId} at WPC`}>Source ↗</a></span>
                   </div>
                 ))}
               </div>
-              <div className="live-boundary"><span>◆</span><p>Product facts refresh automatically. Entity resolution runs against GLEIF on demand. Campaign activity and quality examples remain synthetic.</p></div>
+              <div className="live-boundary"><span>◆</span><p>Product facts refresh automatically. Material field changes create durable events; unchanged records do not rerun agents. Certification changes do not imply licensing status. Campaign activity and quality examples remain synthetic.</p></div>
             </section>
 
             <section className="panel queue-preview">
@@ -336,6 +348,37 @@ export function PoolSignalApp() {
                   </button>
                 ))}
               </div>
+            </section>
+          </div>
+        )}
+
+        {view === "changes" && (
+          <div className="view-stack">
+            <section className="panel change-hero">
+              <div><span className="eyebrow">DURABLE SOURCE-CHANGE CONTROL</span><h2>{sourceWorkCount > 0 ? `${sourceWorkCount} events are active.` : "The change queue is clear."}</h2><p>WPC records are canonicalized, fingerprinted, and compared with the previous version. Only new or materially updated evidence creates an agent run.</p></div>
+              <div className="change-health"><strong>{sourceWorkCount}</strong><span>active events</span><em>{freshnessLabel(liveData?.status.wpc.lastSuccessAt ?? null)}</em></div>
+            </section>
+
+            <section className="metric-grid">
+              <article><span>Tracked fingerprints</span><strong>{changeFeed?.trackedProducts ?? "—"}</strong><em>baseline {freshnessLabel(changeFeed?.baselineAt ?? null).toLowerCase()}</em></article>
+              <article><span>Pending events</span><strong>{String(changeFeed?.pendingCount ?? 0).padStart(2, "0")}</strong><em className={(changeFeed?.pendingCount ?? 0) > 0 ? "amber" : ""}>automatic processing queue</em></article>
+              <article><span>Completed · 30d</span><strong>{String(changeFeed?.completed30d ?? 0).padStart(2, "0")}</strong><em>persisted agent results</em></article>
+              <article><span>Dead-letter events</span><strong>{String(changeFeed?.deadLetterCount ?? 0).padStart(2, "0")}</strong><em className={(changeFeed?.deadLetterCount ?? 0) > 0 ? "coral" : ""}>{(changeFeed?.deadLetterCount ?? 0) > 0 ? "private retry required" : "queue healthy"}</em></article>
+            </section>
+
+            <section className="panel change-ledger">
+              <div className="panel-heading"><div><span>IMMUTABLE AUDIT LEDGER</span><h3>Recent material changes</h3></div><em>{changeFeed?.agentVersion ?? "live-agent-v1"} · {changeFeed?.policyVersion ?? "licensing-policy-v1"}</em></div>
+              {!liveData && <p className="change-empty">Loading the durable change ledger…</p>}
+              {liveData && changeFeed?.recent.length === 0 && <div className="change-empty"><strong>Baseline established.</strong><span>Future WPC additions and material field updates will appear here automatically. Repeated source snapshots do not create duplicate work.</span></div>}
+              {changeFeed?.recent.map((event) => (
+                <article className="change-row" key={event.eventKey}>
+                  <div className="change-identity"><span className={`change-kind ${event.changeType}`}>{event.changeType}</span><strong>{event.product.brand} · {event.product.productName}</strong><em>{event.qiId} · observed {freshnessLabel(event.observedAt).toLowerCase()}</em></div>
+                  <div className="change-fields"><span>Changed evidence</span><div>{event.changedFields.map((field) => <em key={field}>{changeFieldLabels[field]}</em>)}</div></div>
+                  <div className="change-result"><span className={`event-state ${event.status}`}>{event.status.replace("_", " ")}</span>{event.run ? <><strong>{event.run.reviewPriority}/100 · {event.run.requiresHuman ? "human gate" : "monitor"}</strong><em>{event.run.agentVersion} · {event.run.policyVersion}</em></> : <><strong>{event.status === "dead_letter" ? "Operator review required" : "Awaiting automatic agent"}</strong><em>{event.lastError ?? `${event.attempts} processing attempts`}</em></>}</div>
+                  <a href={event.product.sourceUrl} target="_blank" rel="noreferrer">Evidence ↗</a>
+                </article>
+              ))}
+              <div className="change-contract"><span>◆</span><p>Idempotency key = source event + product fingerprint + agent version + policy version. A repeated request returns the existing result; it does not create another run.</p></div>
             </section>
           </div>
         )}
@@ -371,7 +414,7 @@ export function PoolSignalApp() {
 
         {view === "agents" && (
           <div className="view-stack">
-            <section className="agent-hero panel"><div><span className="eyebrow">BOUNDED MULTI-AGENT SYSTEM</span><h2>Autonomy with an audit trail.</h2><p>{agentRun?.source === "live" ? `This verified run began with live WPC record ${agentRun.product?.qiId}, queried GLEIF for legal-entity evidence, and compared an approved identity only against the dated Via snapshot.` : "Five server-side specialist agents transform source signals into a reviewable case. Every handoff has a typed contract, confidence, evidence references, and an abstention path."}</p>{agentRun && <em className="run-proof">Verified {agentRun.source} run · {agentRun.runId.slice(0, 8)} · {agentRun.reviewPriority}/100 priority · {agentRun.requiresHuman ? "human gate engaged" : "monitoring permitted"}</em>}{agentError && <em className="run-error">{agentError}</em>}</div><button className={running ? "run-button running" : "run-button"} onClick={() => void runAgents()} type="button">{running ? "Running trace…" : "Run selected demo case"}</button></section>
+            <section className="agent-hero panel"><div><span className="eyebrow">BOUNDED MULTI-AGENT SYSTEM</span><h2>Autonomy with an audit trail.</h2><p>{agentRun ? "This representative run demonstrates the five-agent contract without writing to the live change ledger." : latestProcessedChange && latestPersistedRun ? `This persisted run was triggered automatically by ${latestProcessedChange.qiId} evidence changing. It is bound to a source fingerprint, agent version, and policy version for safe replay.` : "Five server-side specialist agents transform source changes into reviewable cases. Every handoff has a typed contract, confidence, evidence references, and an abstention path."}</p>{agentRun ? <em className="run-proof">Verified demo run · {agentRun.runId.slice(0, 8)} · {agentRun.reviewPriority}/100 priority · {agentRun.requiresHuman ? "human gate engaged" : "monitoring permitted"}</em> : latestPersistedRun && <em className="run-proof">Persisted live run · {latestPersistedRun.runId.slice(0, 8)} · {latestPersistedRun.reviewPriority}/100 priority · {latestPersistedRun.requiresHuman ? "human gate engaged" : "monitoring permitted"}</em>}{agentError && <em className="run-error">{agentError}</em>}</div><button className={running ? "run-button running" : "run-button"} disabled={running} onClick={() => void runAgents()} type="button">{running ? "Running trace…" : "Run representative demo"}</button></section>
             <section className="agent-map panel">
               {agentTrace.map((step, index) => <article key={step.agent}><span>{String(index + 1).padStart(2, "0")}</span><div><em>{step.status}</em><h3>{step.agent}</h3><p>{step.output}</p></div><strong>{Math.round(step.confidence * 100)}%</strong></article>)}
             </section>

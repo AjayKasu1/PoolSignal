@@ -1,3 +1,5 @@
+import type { AgentStep } from "./demo-data";
+
 export const WPC_PRODUCTS_URL = "https://jpsapi.wirelesspowerconsortium.com/ajax/products/qi";
 export const WPC_PRODUCT_PAGE = "https://jpsapi.wirelesspowerconsortium.com/products/qi";
 export const VIA_QI_URL = "https://www.via-la.com/licensing-programs/qi-wireless-power/";
@@ -58,7 +60,81 @@ export type LiveDataStatus = {
 export type LiveDataResponse = {
   signals: LiveProductSignal[];
   status: LiveDataStatus;
+  changeFeed: LiveChangeFeed;
 };
+
+export type ProductChangeField = "qiId" | "brand" | "productName" | "partNumber" | "productType"
+  | "powerProfile" | "loadPower" | "version" | "certificationDate";
+
+export type CanonicalProductRecord = Pick<LiveProductSignal, ProductChangeField>;
+
+export type LiveChangeRunSummary = {
+  runId: string;
+  status: "review_required" | "monitor";
+  requiresHuman: boolean;
+  reviewPriority: number;
+  trace: AgentStep[];
+  startedAt: string;
+  completedAt: string;
+  agentVersion: string;
+  policyVersion: string;
+};
+
+export type SourceChangeEventSummary = {
+  eventKey: string;
+  qiId: string;
+  changeType: "added" | "updated";
+  changedFields: ProductChangeField[];
+  observedAt: string;
+  status: "pending" | "processing" | "retry_wait" | "dead_letter" | "completed";
+  attempts: number;
+  processedAt: string | null;
+  lastError: string | null;
+  product: LiveProductSignal;
+  run: LiveChangeRunSummary | null;
+};
+
+export type LiveChangeFeed = {
+  baselineAt: string | null;
+  trackedProducts: number;
+  pendingCount: number;
+  processingCount: number;
+  retryCount: number;
+  deadLetterCount: number;
+  completed30d: number;
+  lastDetectedAt: string | null;
+  lastProcessedAt: string | null;
+  agentVersion: string;
+  policyVersion: string;
+  recent: SourceChangeEventSummary[];
+};
+
+const productChangeFields: ProductChangeField[] = [
+  "qiId", "brand", "productName", "partNumber", "productType",
+  "powerProfile", "loadPower", "version", "certificationDate",
+];
+
+export function canonicalProductRecord(product: LiveProductSignal): CanonicalProductRecord {
+  return {
+    qiId: product.qiId,
+    brand: product.brand,
+    productName: product.productName,
+    partNumber: product.partNumber,
+    productType: product.productType,
+    powerProfile: product.powerProfile,
+    loadPower: product.loadPower,
+    version: product.version,
+    certificationDate: product.certificationDate,
+  };
+}
+
+export function changedProductFields(
+  before: CanonicalProductRecord | null,
+  after: CanonicalProductRecord,
+): ProductChangeField[] {
+  if (!before) return [...productChangeFields];
+  return productChangeFields.filter((field) => before[field] !== after[field]);
+}
 
 function cleanText(value: unknown, maxLength = 500): string {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);

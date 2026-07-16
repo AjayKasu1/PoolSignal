@@ -6,11 +6,11 @@
 
 ## Mission control — 60 seconds
 
-Point to the surfaced HX case. Explain that the Scout recognized a recent 25W PTx record. The priority is high because of recency, product relevance, and identity uncertainty—not because the system claims the company has any licensing status.
+Point to “Sources checked. No new evidence,” the 500 tracked fingerprints, and the disabled top control. Explain that the system—not the analyst—decides whether the upstream evidence changed. Open the Change Inbox and show that a repeated snapshot creates no work. Explain that additions or material updates create deterministic events that are processed once and retained with agent and policy versions.
 
 ## Agent trace — 90 seconds
 
-Walk through Data Quality, Scout, Resolver, Coverage, Prioritizer, and Briefing. Show the confidence on every handoff. Emphasize that the Resolver abstained because “HX” did not clear the 0.85 identity threshold. The policy gate allows research or monitoring but no external action.
+Walk through Scout, Resolver, Coverage, Prioritizer, and Policy Gate. Show the confidence on every handoff. Explain the idempotency key, processing lease, bounded retry, and dead-letter path. Emphasize that an ambiguous identity cannot clear the 0.85 threshold. The policy gate allows research or monitoring but no external action.
 
 ## Human review — 90 seconds
 

@@ -2,6 +2,8 @@ import type { AgentRunResult } from "./agent-engine";
 import type { AgentStep } from "./demo-data";
 import type { LiveEntityCandidate, LiveProductSignal } from "./live-data";
 import { compareViaSnapshot, resolveEntityWithGleif, type ViaMatch } from "./live-store";
+export { LICENSING_POLICY_VERSION, LIVE_AGENT_VERSION } from "./agent-versions";
+
 
 function daysSince(date: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(`${date}T00:00:00Z`).getTime()) / 86_400_000));

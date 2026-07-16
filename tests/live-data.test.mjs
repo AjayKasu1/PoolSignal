@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeEntityName, parseViaLicensees, parseWpcFeed, scoreEntityName, validateViaLicensees } from "../lib/live-data.ts";
+import { canonicalProductRecord, changedProductFields, normalizeEntityName, parseViaLicensees, parseWpcFeed, scoreEntityName, validateViaLicensees } from "../lib/live-data.ts";
 
 test("WPC parser retains recent typed products and rejects malformed rows", () => {
   const parsed = parseWpcFeed([
@@ -40,4 +40,17 @@ test("entity scoring normalizes corporate suffixes but preserves ambiguity", () 
   assert.ok(scoreEntityName("ConvenientPower", "ConvenientPower HK Limited") < 0.85);
   assert.ok(scoreEntityName("Apple", "APPLE DEVELOPERS") < 0.85);
   assert.ok(scoreEntityName("HX", "Unrelated Holdings LLC") < 0.5);
+});
+
+test("product change detection ignores transport metadata and identifies material fields", () => {
+  const before = {
+    qiId: "QI-27607", brand: "Niophie", productName: "Niophie 4 in 1", partNumber: "Nio01",
+    productType: "PTx", powerProfile: "MPP + BPP", loadPower: 15, version: "2.0.1",
+    certificationDate: "2026-07-15", sourceUrl: "https://example.com/27607", sourceChecksum: "snapshot-a",
+  };
+  const transportOnly = { ...before, sourceChecksum: "snapshot-b", lastSeenAt: "2026-07-16T00:00:00Z" };
+  assert.deepEqual(changedProductFields(canonicalProductRecord(before), canonicalProductRecord(transportOnly)), []);
+  const materialUpdate = { ...transportOnly, loadPower: 25, powerProfile: "MPP25 + BPP" };
+  assert.deepEqual(changedProductFields(canonicalProductRecord(before), canonicalProductRecord(materialUpdate)), ["powerProfile", "loadPower"]);
+  assert.equal(changedProductFields(null, canonicalProductRecord(before)).length, 9);
 });

@@ -3,6 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { ensureLiveSchema } from "../db";
 import { refreshLiveSources } from "../lib/live-store";
+import { processPendingSourceChanges } from "../lib/change-processor";
 
 interface Env {
   ASSETS: Fetcher;
@@ -121,7 +122,9 @@ const worker = {
     ctx.waitUntil((async () => {
       try {
         await ensureLiveSchema(env.DB);
-        await refreshLiveSources(env.DB, sources, new Date(controller.scheduledTime));
+        const scheduledAt = new Date(controller.scheduledTime);
+        await refreshLiveSources(env.DB, sources, scheduledAt);
+        await processPendingSourceChanges(env.DB, { limit: 3, now: scheduledAt });
       } catch (error) {
         console.error("PoolSignal scheduled refresh failed", {
           source: sources[0],

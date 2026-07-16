@@ -23,8 +23,9 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 ## Data layers
 
 - **Raw:** append-only, dated, checksummed WPC and Via source snapshots.
-- **Conformed:** normalized products, entities, public-list records, and entity relationships.
-- **Intelligence:** agent findings, evidence graph, feature contributions, review priority, and briefs.
+- **Conformed:** normalized products, per-product fingerprints, entities, public-list records, and entity relationships.
+- **Change control:** immutable material-field events, processing leases, retry state, dead-letter state, and idempotency keys.
+- **Intelligence:** version-bound agent findings, evidence graph, feature contributions, review priority, and briefs.
 - **Operations:** human decisions, synthetic campaign events, follow-up aging, and scenario assumptions.
 - **Analytics:** dimensional marts for Power BI and Excel.
 
@@ -38,14 +39,14 @@ Every transition is appended to an audit log. A policy gate evaluates identity c
 
 ## Deployment split
 
-The public interface is deployed directly to Cloudflare Workers with D1-backed live-source state and review events. A Worker cron refreshes WPC every six hours. A scheduled GitHub Actions portability workflow fetches Via daily and publishes its checksummed, validated snapshot through a dedicated GitHub OIDC-authenticated route, avoiding Via's TLS incompatibility with Cloudflare Worker egress without introducing a shared secret. GLEIF resolution runs on demand for a selected monitored product, applies a 20-second upstream timeout, and writes a bounded cache. The Python package contains the reproducible analytical pipeline and agent-policy reference implementation. Operational campaign, response, and quality records remain explicitly synthetic.
+The public interface is deployed directly to Cloudflare Workers with D1-backed live-source, change-event, agent-run, and review state. A Worker cron refreshes WPC every six hours, compares canonical material fields with the previous per-product SHA-256 fingerprint, emits deterministic events only for additions or updates, and processes a bounded batch automatically. A scheduled GitHub Actions portability workflow fetches Via daily and publishes its checksummed, validated snapshot through a dedicated GitHub OIDC-authenticated route, avoiding Via's TLS incompatibility with Cloudflare Worker egress without introducing a shared secret. GLEIF resolution runs only from a claimed change event, applies a 20-second upstream timeout, and writes a bounded cache. The Python package contains the reproducible analytical pipeline and agent-policy reference implementation. Operational campaign, response, and quality records remain explicitly synthetic.
 
 ## Live request path
 
-`WPC public feed → Worker cron → bounded validation → SHA-256 snapshot → D1`
+`WPC public feed → Worker cron → bounded validation → canonical product fields → per-product SHA-256 → durable change event or no-op`
 
 `Via public page → scheduled portability workflow → parse + checksum → authenticated ingestion → independent revalidation → atomic D1 snapshot`
 
-`selected live Qi signal → exact GLEIF query/cache → local name score → 0.85 identity gate → dated Via-name comparison → transparent priority → policy gate → human review or monitor`
+`claimed change event → idempotency check → exact GLEIF query/cache → local name score → 0.85 identity gate → dated Via-name comparison → transparent priority → policy gate → persisted human-review or monitor result`
 
-Manual WPC refresh is reviewer-authenticated. Via ingestion accepts only a valid short-lived identity for the exact scheduled workflow and has no review-decision authority. The public agent endpoint accepts only a Qi ID already present in the bounded monitoring table and cannot contact a company or persist an operational decision.
+The idempotency key binds the source event, product fingerprint, agent version, and policy version. Atomic processing leases prevent concurrent duplication; failed events receive exponential retry delays and move to a dead-letter state after three attempts. A stale 15-minute lease returns safely to the retry queue. Manual WPC refresh and change-event retry are reviewer-authenticated. Via ingestion accepts only a valid short-lived identity for the exact scheduled workflow and has no review-decision authority. Direct public live-agent reruns are rejected.

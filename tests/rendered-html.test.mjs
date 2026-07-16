@@ -10,9 +10,9 @@ test("production build contains the PoolSignal intelligence console", async () =
   ]);
   assert.match(layout, /PoolSignal — Qi Licensing Intelligence/i);
   assert.match(app, /Live sources connected/i);
-  assert.match(app, /The newest live certification is ready/i);
-  assert.match(app, /Run latest live cycle/i);
-  assert.match(app, /HUMAN REVIEW GATE/i);
+  assert.match(app, /Sources checked\. No new evidence/i);
+  assert.match(app, /No new source changes/i);
+  assert.match(app, /Change inbox/i);
   assert.doesNotMatch(`${app}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -46,7 +46,7 @@ test("ships production metadata, persistence declaration, and no starter surface
 
 test("user-facing copy preserves the analytical boundary", async () => {
   const source = await readFile(new URL("../app/PoolSignalApp.tsx", import.meta.url), "utf8");
-  assert.match(source, /before making a licensing conclusion/i);
+  assert.match(source, /Certification changes do not imply licensing status/i);
   assert.match(source, /Certification counts are never treated as shipment volume/i);
   assert.match(source, /No external actions enabled/i);
   assert.doesNotMatch(source, /is unlicensed|is infringing|owes royalties/i);
@@ -70,35 +70,46 @@ test("interactive controls call real bounded APIs and label public previews hone
   assert.doesNotMatch(reviewRoute, /detail:/);
 });
 
-test("live public-source monitoring is wired to bounded APIs and scheduled snapshots", async () => {
-  const [app, liveRoute, viaRoute, liveStore, liveData, worker, wrangler, viaWorkflow, migration] = await Promise.all([
+test("live public-source monitoring is wired to change-driven, idempotent processing", async () => {
+  const [app, liveRoute, changeRoute, viaRoute, liveStore, liveData, changeProcessor, agentRoute, worker, wrangler, viaWorkflow, sourceMigration, changeMigration] = await Promise.all([
     readFile(new URL("../app/PoolSignalApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/live-data/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/change-events/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/live-data/via-snapshot/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/live-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/live-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/change-processor.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/agent-runs/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
     readFile(new URL("../.github/workflows/via-snapshot.yml", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0001_live_public_sources.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0002_change_driven_processing.sql", import.meta.url), "utf8"),
   ]);
   assert.match(app, /Latest WPC certifications/);
   assert.match(app, /Live public · synthetic operations/);
-  assert.match(app, /runPrimaryCycle/);
-  assert.match(app, /LIVE AGENT RESULT/);
-  assert.doesNotMatch(app, /Run agents on/);
+  assert.match(app, /IMMUTABLE AUDIT LEDGER/);
+  assert.match(app, /No new source changes/);
+  assert.doesNotMatch(app, /Run latest live cycle|Rerun latest live cycle|Run agents on/);
   assert.match(app, /SYNTHETIC REVIEW WORKFLOW/);
   assert.match(app, /ILLUSTRATIVE MARKET SIGNAL/);
   assert.doesNotMatch(app, /<strong>08<\/strong>/);
   assert.match(liveRoute, /reviewerAuthorization/);
+  assert.match(changeRoute, /reviewerAuthorization/);
+  assert.match(changeProcessor, /idempotencyKey/);
+  assert.match(changeProcessor, /dead_letter/);
+  assert.match(agentRoute, /Direct live reruns are disabled/);
   assert.match(viaRoute, /verifyGitHubActionsOidc/);
   assert.match(viaRoute, /MAX_BODY_BYTES/);
   assert.match(liveStore, /GLEIF_API_URL/);
   assert.match(liveData, /api\.gleif\.org/);
   assert.match(liveData, /ajax\/products\/qi/);
   assert.match(worker, /scheduled\(/);
+  assert.match(worker, /processPendingSourceChanges/);
   assert.match(wrangler, /0 \*\/6 \* \* \*/);
   assert.match(viaWorkflow, /30 10 \* \* \*/);
   assert.match(viaWorkflow, /id-token: write/);
-  assert.match(migration, /CREATE TABLE `live_products`/);
+  assert.match(sourceMigration, /CREATE TABLE `live_products`/);
+  assert.match(changeMigration, /CREATE TABLE `source_change_events`/);
+  assert.match(changeMigration, /CREATE TABLE `live_agent_runs`/);
 });

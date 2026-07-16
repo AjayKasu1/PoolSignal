@@ -1,6 +1,7 @@
 import { ensureLiveSchema, getD1 } from "../../../db";
 import { getLiveData, refreshLiveSources, type LiveSource } from "../../../lib/live-store";
 import { reviewerAuthorization } from "../../../lib/reviewer-auth";
+import { processPendingSourceChanges } from "../../../lib/change-processor";
 
 const jsonHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 const allowedSources = new Set<LiveSource>(["wpc"]);
@@ -21,6 +22,11 @@ export async function GET(request: Request) {
         wpc: { lastSuccessAt: null, totalRecords: 0, monitoredRecords: 0, new30d: 0, newestCertificationDate: null },
         via: { lastSuccessAt: null, licenseeCount: 0 },
         gleif: { mode: "on-demand", cachedQueries: 0 },
+      },
+      changeFeed: {
+        baselineAt: null, trackedProducts: 0, pendingCount: 0, processingCount: 0,
+        retryCount: 0, deadLetterCount: 0, completed30d: 0, lastDetectedAt: null,
+        lastProcessedAt: null, agentVersion: "live-agent-v1", policyVersion: "licensing-policy-v1", recent: [],
       },
     }, { status: 503, headers: jsonHeaders });
   }
@@ -57,7 +63,8 @@ export async function POST(request: Request) {
     }
     await ensureLiveSchema();
     const results = await refreshLiveSources(getD1(), requested as LiveSource[]);
-    return Response.json({ results, refreshedAt: new Date().toISOString() }, { headers: jsonHeaders });
+    const processing = await processPendingSourceChanges(getD1(), { limit: 3 });
+    return Response.json({ results, processing, refreshedAt: new Date().toISOString() }, { headers: jsonHeaders });
   } catch (error) {
     console.error("PoolSignal live-source refresh failed", error instanceof Error ? error.message : "Unknown error");
     return Response.json({ error: "The live-source refresh could not be completed" }, { status: 502, headers: jsonHeaders });

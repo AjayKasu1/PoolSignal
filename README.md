@@ -14,9 +14,10 @@ The central design choice is restraint: agents can find, normalize, compare, sco
 
 ## What the demo includes
 
-- Polished intelligence console with mission control, agent trace, review queue, campaign flow, scenario lab, and data-quality views
+- Polished intelligence console with mission control, a durable source-change inbox, agent trace, review queue, campaign flow, scenario lab, and data-quality views
 - Scheduled WPC Qi monitoring every six hours, a daily Via public-list snapshot, and cached on-demand GLEIF entity enrichment
-- Live five-agent Worker pipeline plus a six-agent Python reference pipeline, both with typed findings, transparent scoring, abstention, and policy-as-code
+- Per-product SHA-256 fingerprints, material-field diffs, idempotent event keys, automatic agent processing, bounded retries, and a dead-letter state
+- Live five-agent Worker pipeline with persisted versioned runs plus a six-agent Python reference pipeline, both with typed findings, transparent scoring, abstention, and policy-as-code
 - Cloudflare D1 review-event API with server-derived case data, strict validation, and authenticated reviewer writes
 - Functional evidence search, queue sorting, server-verified agent runs, and clearly labeled local decision previews
 - PostgreSQL dimensional warehouse model and a Power BI-ready star-schema extract
@@ -51,7 +52,7 @@ The local portfolio opens at `http://localhost:3000`.
 
 Authenticated review writes are optional. Copy `.dev.vars.example` to `.dev.vars`, replace the placeholder with a long random `REVIEWER_TOKEN`, and enter that same value in the review queue. Without a key, decision buttons remain safe, explicitly local previews.
 
-No source credential is needed for WPC, Via, or GLEIF. WPC is refreshed by the Worker, Via by a scheduled portability workflow, and GLEIF on demand. On a new deployment, apply the migrations and run one authenticated `POST /api/live-data` WPC refresh (or wait for its schedule). The Via publisher uses a short-lived GitHub OIDC identity bound to this repository, workflow, and `main` branch—there is no stored ingestion secret.
+No source credential is needed for WPC, Via, or GLEIF. WPC is refreshed by the Worker, Via by a scheduled portability workflow, and GLEIF only when a durable WPC change event invokes the Resolver. On a new deployment, apply the migrations and run one authenticated `POST /api/live-data` WPC refresh (or wait for its schedule). The first snapshot establishes a fingerprint baseline without generating fake events. The Via publisher uses a short-lived GitHub OIDC identity bound to this repository, workflow, and `main` branch—there is no stored ingestion secret.
 
 Run the agentic reference pipeline:
 
@@ -92,9 +93,9 @@ npm run db:migrations
 
 ## Eight-minute interview demonstration
 
-1. Show a newly detected certification signal.
-2. Explain why the Resolver abstained on an ambiguous brand.
-3. Open the evidence packet and agent trace.
+1. Show the source monitor, 500-product fingerprint baseline, and disabled “No new source changes” control.
+2. Open the Change Inbox and explain material-field diffs, idempotency, version binding, retries, and dead-letter handling.
+3. Explain why the Resolver abstained on an ambiguous brand and open the evidence-to-decision trace.
 4. Show that public-list absence is labeled as a research condition, not licensing status.
 5. Approve, monitor, or return the entity proposal and explain the audit event.
 6. Move to the synthetic campaign flow and identify an aging item.
@@ -108,9 +109,11 @@ The complete talk track is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 - Public and synthetic data only
 - No contacts, notices, responses, or external messages
 - Source snapshots are append-only and checksummed; conformed records retain first- and last-seen timestamps
+- Material product fields receive per-record SHA-256 fingerprints; unchanged snapshots create no agent work
+- Change events and live agent results are durable, idempotent, version-bound, retryable, and auditable
 - Retrieval must honor source terms, robots policies, caching, and rate limits
 - No API secrets in the repository
-- Public agent runs are bounded to monitored Qi records, cache GLEIF lookups, are non-persistent, and never perform outreach
+- Direct public live reruns are disabled; scheduled change events invoke persisted live runs and never perform outreach
 - Durable human decisions require an environment-managed reviewer secret and create append-only review events
 - HTTPS redirection, CSP, HSTS, clickjacking protection, restrictive permissions policy, and content-type hardening
 - Model output is advisory and constrained by policy-as-code

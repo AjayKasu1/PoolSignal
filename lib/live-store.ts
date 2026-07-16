@@ -1,9 +1,15 @@
 import {
+  canonicalProductRecord,
+  changedProductFields,
   GLEIF_API_URL,
+  type CanonicalProductRecord,
   type LiveDataResponse,
+  type LiveChangeRunSummary,
   type LiveDataStatus,
   type LiveEntityCandidate,
   type LiveProductSignal,
+  type ProductChangeField,
+  type SourceChangeEventSummary,
   normalizeEntityName,
   parseViaLicensees,
   parseWpcFeed,
@@ -12,6 +18,8 @@ import {
   VIA_QI_URL,
   WPC_PRODUCTS_URL,
 } from "./live-data";
+import { LICENSING_POLICY_VERSION, LIVE_AGENT_VERSION } from "./agent-versions";
+import type { AgentRunResult } from "./agent-engine";
 
 const REQUEST_HEADERS = {
   Accept: "application/json, text/html;q=0.9",
@@ -31,6 +39,43 @@ async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+type ProductVersionRow = {
+  record_key: string;
+  record_hash: string;
+  canonical_json: string;
+};
+
+type ChangeEventRow = {
+  event_key: string;
+  qi_id: string;
+  change_type: "added" | "updated";
+  changed_fields_json: string;
+  after_json: string;
+  observed_at: string;
+  status: SourceChangeEventSummary["status"];
+  attempts: number;
+  processed_at: string | null;
+  last_error: string | null;
+  result_json: string | null;
+  agent_version: string | null;
+  policy_version: string | null;
+};
+
+function safeJson<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function productFingerprint(product: LiveProductSignal): Promise<{ hash: string; canonical: CanonicalProductRecord; canonicalJson: string }> {
+  const canonical = canonicalProductRecord(product);
+  const canonicalJson = JSON.stringify(canonical);
+  return { hash: await sha256(canonicalJson), canonical, canonicalJson };
 }
 
 async function fetchBoundedText(url: string, maxBytes: number, timeoutMs = 20_000): Promise<string> {
@@ -79,6 +124,33 @@ async function runBatches(db: D1Database, statements: D1PreparedStatement[], siz
   }
 }
 
+export async function ensureWpcVersionBaseline(db: D1Database, now = new Date()): Promise<number> {
+  const existing = await db.prepare("SELECT COUNT(*) AS count FROM source_product_versions WHERE source_name = 'wpc_qi'")
+    .first<{ count: number }>();
+  if (Number(existing?.count ?? 0) > 0) return Number(existing?.count ?? 0);
+
+  const products = await db.prepare("SELECT * FROM live_products ORDER BY certification_date DESC").all<ProductRow>();
+  if (products.results.length === 0) return 0;
+  const fingerprints = await Promise.all(products.results.map(async (row) => ({
+    row,
+    fingerprint: await productFingerprint(mapProduct(row)),
+  })));
+  const observedAt = now.toISOString();
+  await runBatches(db, fingerprints.map(({ row, fingerprint }) => db.prepare(`
+    INSERT INTO source_product_versions(
+      source_name, record_key, record_hash, canonical_json, first_observed_at, last_observed_at
+    ) VALUES ('wpc_qi', ?, ?, ?, ?, ?)
+    ON CONFLICT(source_name, record_key) DO NOTHING
+  `).bind(
+    row.qi_id,
+    fingerprint.hash,
+    fingerprint.canonicalJson,
+    row.first_seen_at || observedAt,
+    row.last_seen_at || observedAt,
+  )));
+  return fingerprints.length;
+}
+
 export async function refreshWpcProducts(db: D1Database, now = new Date()): Promise<Record<string, unknown>> {
   const capturedAt = now.toISOString();
   const body = await fetchBoundedText(WPC_PRODUCTS_URL, 5_000_000);
@@ -92,6 +164,61 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
   const parsed = parseWpcFeed(payload, checksum, now);
   if (parsed.totalRecords < 1_000 || parsed.retainedRecords.length < 25) {
     throw new Error("WPC response failed its record-count contract");
+  }
+
+  await ensureWpcVersionBaseline(db, now);
+  const versions = await db.prepare(`
+    SELECT record_key, record_hash, canonical_json
+    FROM source_product_versions
+    WHERE source_name = 'wpc_qi'
+  `).all<ProductVersionRow>();
+  const previousByKey = new Map(versions.results.map((row) => [row.record_key, row]));
+  const hasBaseline = previousByKey.size > 0;
+  const fingerprints = await Promise.all(parsed.retainedRecords.map(async (record) => ({
+    record,
+    fingerprint: await productFingerprint(record),
+  })));
+
+  const changeStatements: D1PreparedStatement[] = [];
+  const versionStatements: D1PreparedStatement[] = [];
+  let changesDetected = 0;
+  for (const { record, fingerprint } of fingerprints) {
+    const previous = previousByKey.get(record.qiId);
+    const changed = !previous || previous.record_hash !== fingerprint.hash;
+    if (hasBaseline && changed) {
+      const before = previous ? safeJson<CanonicalProductRecord | null>(previous.canonical_json, null) : null;
+      const changedFields = changedProductFields(before, fingerprint.canonical);
+      const eventKey = `wpc_qi:${record.qiId}:${fingerprint.hash}`;
+      changeStatements.push(db.prepare(`
+        INSERT INTO source_change_events(
+          event_key, source_name, record_key, qi_id, change_type,
+          before_hash, after_hash, changed_fields_json, before_json, after_json,
+          observed_at, status, attempts
+        ) VALUES (?, 'wpc_qi', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)
+        ON CONFLICT(event_key) DO NOTHING
+      `).bind(
+        eventKey,
+        record.qiId,
+        record.qiId,
+        previous ? "updated" : "added",
+        previous?.record_hash ?? null,
+        fingerprint.hash,
+        JSON.stringify(changedFields),
+        previous?.canonical_json ?? null,
+        JSON.stringify(record),
+        capturedAt,
+      ));
+      changesDetected += 1;
+    }
+    versionStatements.push(db.prepare(`
+      INSERT INTO source_product_versions(
+        source_name, record_key, record_hash, canonical_json, first_observed_at, last_observed_at
+      ) VALUES ('wpc_qi', ?, ?, ?, ?, ?)
+      ON CONFLICT(source_name, record_key) DO UPDATE SET
+        record_hash = excluded.record_hash,
+        canonical_json = excluded.canonical_json,
+        last_observed_at = excluded.last_observed_at
+    `).bind(record.qiId, fingerprint.hash, fingerprint.canonicalJson, capturedAt, capturedAt));
   }
 
   const statements = parsed.retainedRecords.map((record) => db.prepare(`
@@ -127,6 +254,8 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
     capturedAt,
     capturedAt,
   ));
+  await runBatches(db, changeStatements);
+  await runBatches(db, versionStatements);
   await runBatches(db, statements);
   await insertSnapshot(db, {
     sourceName: "wpc_qi",
@@ -141,6 +270,8 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
       monitoringWindowDays: 180,
       maximumStoredRecords: 500,
       rejectedRecords: parsed.rejectedRecords,
+      changesDetected,
+      changeDetection: "per-product-sha256-v1",
     },
   });
   return {
@@ -149,6 +280,7 @@ export async function refreshWpcProducts(db: D1Database, now = new Date()): Prom
     totalRecords: parsed.totalRecords,
     retainedRecords: parsed.retainedRecords.length,
     newestCertificationDate: parsed.newestCertificationDate,
+    changesDetected,
   };
 }
 
@@ -242,6 +374,46 @@ type ProductRow = {
   last_seen_at: string;
 };
 
+type ChangeStatsRow = {
+  pending_count: number;
+  processing_count: number;
+  retry_count: number;
+  dead_letter_count: number;
+  completed_30d: number;
+  last_detected_at: string | null;
+  last_processed_at: string | null;
+};
+
+function mapChangeEvent(row: ChangeEventRow): SourceChangeEventSummary | null {
+  const product = safeJson<LiveProductSignal | null>(row.after_json, null);
+  if (!product) return null;
+  const result = safeJson<AgentRunResult | null>(row.result_json, null);
+  const run: LiveChangeRunSummary | null = result && row.agent_version && row.policy_version ? {
+    runId: result.runId,
+    status: result.status,
+    requiresHuman: result.requiresHuman,
+    reviewPriority: result.reviewPriority,
+    trace: result.trace,
+    startedAt: result.startedAt,
+    completedAt: result.completedAt,
+    agentVersion: row.agent_version,
+    policyVersion: row.policy_version,
+  } : null;
+  return {
+    eventKey: row.event_key,
+    qiId: row.qi_id,
+    changeType: row.change_type,
+    changedFields: safeJson<ProductChangeField[]>(row.changed_fields_json, []),
+    observedAt: row.observed_at,
+    status: row.status,
+    attempts: row.attempts,
+    processedAt: row.processed_at,
+    lastError: row.last_error,
+    product,
+    run,
+  };
+}
+
 function mapProduct(row: ProductRow): LiveProductSignal {
   return {
     qiId: row.qi_id,
@@ -262,13 +434,38 @@ function mapProduct(row: ProductRow): LiveProductSignal {
 
 export async function getLiveData(db: D1Database, limit = 8, now = new Date()): Promise<LiveDataResponse> {
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 25);
-  const [wpcSnapshot, viaSnapshot, products, new30d, viaCount, cacheCount] = await Promise.all([
+  await ensureWpcVersionBaseline(db, now);
+  const [wpcSnapshot, viaSnapshot, products, new30d, viaCount, cacheCount, versionStats, changeStats, recentChanges] = await Promise.all([
     db.prepare("SELECT captured_at, record_count, retained_count, newest_record_at FROM source_snapshots WHERE source_name = 'wpc_qi' AND status = 'complete' ORDER BY id DESC LIMIT 1").first<SnapshotRow>(),
     db.prepare("SELECT captured_at, record_count, retained_count, newest_record_at FROM source_snapshots WHERE source_name = 'via_qi_licensees' AND status = 'complete' ORDER BY id DESC LIMIT 1").first<SnapshotRow>(),
     db.prepare("SELECT * FROM live_products ORDER BY certification_date DESC, CAST(SUBSTR(qi_id, 4) AS INTEGER) DESC LIMIT ?").bind(safeLimit).all<ProductRow>(),
     db.prepare("SELECT COUNT(*) AS count FROM live_products WHERE certification_date >= date('now', '-30 days')").first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM via_public_entities WHERE active = 1").first<{ count: number }>(),
     db.prepare("SELECT COUNT(*) AS count FROM entity_resolution_cache WHERE expires_at > ?").bind(now.toISOString()).first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) AS count, MIN(first_observed_at) AS baseline_at FROM source_product_versions WHERE source_name = 'wpc_qi'")
+      .first<{ count: number; baseline_at: string | null }>(),
+    db.prepare(`
+      SELECT
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing_count,
+        SUM(CASE WHEN status = 'retry_wait' THEN 1 ELSE 0 END) AS retry_count,
+        SUM(CASE WHEN status = 'dead_letter' THEN 1 ELSE 0 END) AS dead_letter_count,
+        SUM(CASE WHEN status = 'completed' AND processed_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END) AS completed_30d,
+        MAX(observed_at) AS last_detected_at,
+        MAX(processed_at) AS last_processed_at
+      FROM source_change_events
+    `).first<ChangeStatsRow>(),
+    db.prepare(`
+      SELECT
+        event.event_key, event.qi_id, event.change_type, event.changed_fields_json,
+        event.after_json, event.observed_at, event.status, event.attempts,
+        event.processed_at, event.last_error,
+        run.result_json, run.agent_version, run.policy_version
+      FROM source_change_events AS event
+      LEFT JOIN live_agent_runs AS run ON run.run_key = event.agent_run_key
+      ORDER BY event.observed_at DESC
+      LIMIT 12
+    `).all<ChangeEventRow>(),
   ]);
 
   const status: LiveDataStatus = {
@@ -287,12 +484,28 @@ export async function getLiveData(db: D1Database, limit = 8, now = new Date()): 
     },
     gleif: { mode: "on-demand", cachedQueries: Number(cacheCount?.count ?? 0) },
   };
-  return { signals: products.results.map(mapProduct), status };
-}
-
-export async function getLiveProduct(db: D1Database, qiId: string): Promise<LiveProductSignal | null> {
-  const row = await db.prepare("SELECT * FROM live_products WHERE qi_id = ? LIMIT 1").bind(qiId).first<ProductRow>();
-  return row ? mapProduct(row) : null;
+  const recent = recentChanges.results.flatMap((row) => {
+    const event = mapChangeEvent(row);
+    return event ? [event] : [];
+  });
+  return {
+    signals: products.results.map(mapProduct),
+    status,
+    changeFeed: {
+      baselineAt: versionStats?.baseline_at ?? null,
+      trackedProducts: Number(versionStats?.count ?? 0),
+      pendingCount: Number(changeStats?.pending_count ?? 0),
+      processingCount: Number(changeStats?.processing_count ?? 0),
+      retryCount: Number(changeStats?.retry_count ?? 0),
+      deadLetterCount: Number(changeStats?.dead_letter_count ?? 0),
+      completed30d: Number(changeStats?.completed_30d ?? 0),
+      lastDetectedAt: changeStats?.last_detected_at ?? null,
+      lastProcessedAt: changeStats?.last_processed_at ?? null,
+      agentVersion: LIVE_AGENT_VERSION,
+      policyVersion: LICENSING_POLICY_VERSION,
+      recent,
+    },
+  };
 }
 
 type GleifRecord = {

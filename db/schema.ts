@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const reviewCases = sqliteTable("review_cases", {
   id: text("id").primaryKey(),
@@ -77,4 +77,49 @@ export const entityResolutionCache = sqliteTable("entity_resolution_cache", {
   resultCount: integer("result_count").notNull().default(0),
   retrievedAt: text("retrieved_at").notNull(),
   expiresAt: text("expires_at").notNull(),
+});
+
+export const sourceProductVersions = sqliteTable("source_product_versions", {
+  sourceName: text("source_name").notNull(),
+  recordKey: text("record_key").notNull(),
+  recordHash: text("record_hash").notNull(),
+  canonicalJson: text("canonical_json").notNull(),
+  firstObservedAt: text("first_observed_at").notNull(),
+  lastObservedAt: text("last_observed_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.sourceName, table.recordKey] })]);
+
+export const sourceChangeEvents = sqliteTable("source_change_events", {
+  eventKey: text("event_key").primaryKey(),
+  sourceName: text("source_name").notNull(),
+  recordKey: text("record_key").notNull(),
+  qiId: text("qi_id").notNull(),
+  changeType: text("change_type").notNull(),
+  beforeHash: text("before_hash"),
+  afterHash: text("after_hash").notNull(),
+  changedFieldsJson: text("changed_fields_json").notNull().default("[]"),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json").notNull(),
+  observedAt: text("observed_at").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  processingStartedAt: text("processing_started_at"),
+  nextAttemptAt: text("next_attempt_at"),
+  lastError: text("last_error"),
+  processedAt: text("processed_at"),
+  agentRunKey: text("agent_run_key"),
+});
+
+export const liveAgentRuns = sqliteTable("live_agent_runs", {
+  runKey: text("run_key").primaryKey(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  eventKey: text("event_key").notNull(),
+  qiId: text("qi_id").notNull(),
+  status: text("status").notNull(),
+  reviewPriority: integer("review_priority").notNull(),
+  requiresHuman: integer("requires_human", { mode: "boolean" }).notNull(),
+  resultJson: text("result_json").notNull(),
+  agentVersion: text("agent_version").notNull(),
+  policyVersion: text("policy_version").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at").notNull(),
 });

@@ -1,8 +1,5 @@
 import { runAgentCycle } from "../../../lib/agent-engine";
 import { reviewCases } from "../../../lib/demo-data";
-import { ensureLiveSchema, getD1 } from "../../../db";
-import { runLiveAgentCycle } from "../../../lib/live-agent-engine";
-import { getLiveProduct } from "../../../lib/live-store";
 
 const jsonHeaders = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 
@@ -34,11 +31,10 @@ export async function POST(request: Request) {
     if (!/^QI-\d{1,8}$/.test(qiId)) {
       return Response.json({ error: "A valid caseId or live qiId is required" }, { status: 400, headers: jsonHeaders });
     }
-    await ensureLiveSchema();
-    const liveProduct = await getLiveProduct(getD1(), qiId);
-    if (!liveProduct) return Response.json({ error: "The live Qi record is not in the monitored window" }, { status: 404, headers: jsonHeaders });
-
-    return Response.json({ run: await runLiveAgentCycle(getD1(), liveProduct) }, { headers: jsonHeaders });
+    return Response.json({
+      error: "Direct live reruns are disabled. Live agents run once from durable source-change events.",
+      qiId,
+    }, { status: 409, headers: jsonHeaders });
   } catch {
     return Response.json({ error: "The agent cycle could not be completed" }, { status: 500, headers: jsonHeaders });
   }

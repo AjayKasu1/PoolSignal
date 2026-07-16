@@ -12,7 +12,7 @@ export type AgentRunResult = {
   trace: AgentStep[];
   startedAt: string;
   completedAt: string;
-  persisted: false;
+  persisted: boolean;
   source: "demo" | "live";
   product?: LiveProductSignal;
   entityCandidates?: LiveEntityCandidate[];
