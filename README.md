@@ -129,3 +129,7 @@ Both the full dependency audit and the production-only dependency audit report z
 - GLEIF entity API: https://www.gleif.org/en/lei-data/gleif-api/
 
 This is an independent portfolio demonstration and is not affiliated with, endorsed by, or a statement on behalf of Via Licensing Alliance, Dolby Laboratories, or the Wireless Power Consortium.
+
+## License and third-party materials
+
+PoolSignal's original source code and accompanying documentation are available under the [MIT License](LICENSE). External source records, datasets, names, logos, and trademarks remain the property of their respective owners and are not relicensed by this project.
