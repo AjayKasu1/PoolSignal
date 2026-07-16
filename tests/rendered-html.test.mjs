@@ -21,12 +21,12 @@ test("production build contains the PoolSignal intelligence console", async () =
   assert.doesNotMatch(`${app}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("ships production metadata, persistence declaration, and no starter surface", async () => {
-  const [layout, packageJson, hosting, worker] = await Promise.all([
+test("ships production metadata, Cloudflare persistence, and no starter surface", async () => {
+  const [layout, packageJson, worker, wrangler] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /\/og\.jpg/);
@@ -39,10 +39,8 @@ test("ships production metadata, persistence declaration, and no starter surface
   assert.match(worker, /url\.protocol === "http:"/);
   assert.match(worker, /caches as CacheStorage/);
   assert.match(worker, /s-maxage=300/);
-  const hostingConfig = JSON.parse(hosting);
-  assert.equal(hostingConfig.d1, "DB");
-  assert.equal(hostingConfig.r2, null);
-  assert.match(hostingConfig.project_id, /^appgprj_[a-z0-9]+$/);
+  assert.match(wrangler, /"binding": "DB"/);
+  assert.match(wrangler, /"database_name": "poolsignal-db"/);
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   await access(new URL("../public/og.jpg", import.meta.url));
   await access(new URL("../public/favicon.png", import.meta.url));
