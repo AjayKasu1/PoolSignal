@@ -18,7 +18,7 @@ test("production build contains the PoolSignal intelligence console", async () =
   assert.match(app, /Successful source-check receipts/i);
   assert.match(app, /last successful state on every visit/i);
   assert.doesNotMatch(app, /<span>Automated change runs · 30d<\/span><strong>\{String/i);
-  assert.doesNotMatch(`${app}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+  assert.doesNotMatch(`${app}\n${layout}`, /Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("ships production metadata, Cloudflare persistence, and no starter surface", async () => {

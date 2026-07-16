@@ -6,7 +6,7 @@
 
 [**Open the live PoolSignal demo →**](https://poolsignal.ajaykasu7.workers.dev)
 
-Production is deployed directly to Cloudflare Workers with a dedicated D1 database. The public demo does not depend on ChatGPT Sites or a developer laptop remaining online.
+Production runs on Cloudflare Workers with persistent D1 storage and remains available independently of any local development environment.
 
 PoolSignal is a production-style portfolio project built for a licensing analytics role. It turns live public product-certification signals, dated licensing-program snapshots, entity candidates, synthetic CRM activity, and explicit scenario assumptions into auditable human-review cases. The live feeds require no API key, account, or email registration.
 
