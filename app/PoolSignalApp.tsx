@@ -50,7 +50,7 @@ function freshnessLabel(value: string | null): string {
   return hours < 48 ? `Updated ${hours}h ago` : `Updated ${Math.floor(hours / 24)}d ago`;
 }
 
-function exactUtcLabel(value: string | null): string {
+function exactTimeLabel(value: string | null, timeZone: string): string {
   if (!value) return "Waiting for first successful check";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -60,9 +60,13 @@ function exactUtcLabel(value: string | null): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: true,
-    timeZone: "UTC",
+    timeZone,
     timeZoneName: "short",
   }).format(new Date(value));
+}
+
+function canonicalUtcLabel(value: string): string {
+  return new Date(value).toISOString();
 }
 
 function countComparison(previous: number | null, current: number): string {
@@ -99,6 +103,7 @@ export function PoolSignalApp() {
   const [annualUnits, setAnnualUnits] = useState(250000);
   const [fee, setFee] = useState(0.25);
   const [discount, setDiscount] = useState(10);
+  const [displayTimeZone, setDisplayTimeZone] = useState("UTC");
 
   const selected = reviewCases.find((item) => item.id === selectedId) ?? reviewCases[0];
   const royaltyUnits = Math.max(annualUnits - 25000, 0);
@@ -140,6 +145,11 @@ export function PoolSignalApp() {
     }
     return cases.sort((left, right) => right.score - left.score);
   }, [queueSort]);
+
+  useEffect(() => {
+    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browserTimeZone) setDisplayTimeZone(browserTimeZone);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -287,7 +297,7 @@ export function PoolSignalApp() {
                   : sourceWorkCount > 0
                     ? `PoolSignal detected product-level evidence changes after the ${freshnessLabel(liveData.status.wpc.lastSuccessAt)} WPC check. Each event is deduplicated, processed once, and retained for audit.`
                     : lastSuccessfulCheck
-                      ? `At ${exactUtcLabel(lastSuccessfulCheck.checkedAt)}, PoolSignal compared ${lastSuccessfulCheck.monitoredRecords.toLocaleString()} product fingerprints with the previous verified snapshot. The last-known-good values remain visible until a newer check succeeds.`
+                      ? <>At <time dateTime={canonicalUtcLabel(lastSuccessfulCheck.checkedAt)} title={`Canonical UTC: ${canonicalUtcLabel(lastSuccessfulCheck.checkedAt)}`}>{exactTimeLabel(lastSuccessfulCheck.checkedAt, displayTimeZone)}</time>, PoolSignal compared {lastSuccessfulCheck.monitoredRecords.toLocaleString()} product fingerprints with the previous verified snapshot. The last-known-good values remain visible until a newer check succeeds.</>
                       : "PoolSignal is retaining the last successful source state while the comparison history warms up."}</p>
                 <div className="hero-actions">
                   <button type="button" onClick={() => setView("changes")}>Open change inbox <span>→</span></button>
@@ -296,7 +306,7 @@ export function PoolSignalApp() {
               </div>
               <div className="hero-score">
                 <div className="score-prompt"><div><strong>{lastSuccessfulCheck?.observedRecords.toLocaleString() ?? "—"}</strong><span>source rows verified</span></div></div>
-                <div className="score-context"><span>Last successful source state</span><strong>{lastSuccessfulCheck ? `${lastSuccessfulCheck.monitoredRecords.toLocaleString()} fingerprints · ${exactUtcLabel(lastSuccessfulCheck.checkedAt)}` : "Waiting for first verified check"}</strong></div>
+                <div className="score-context"><span>Last successful source state</span><strong>{lastSuccessfulCheck ? <>{lastSuccessfulCheck.monitoredRecords.toLocaleString()} fingerprints · <time dateTime={canonicalUtcLabel(lastSuccessfulCheck.checkedAt)} title={`Canonical UTC: ${canonicalUtcLabel(lastSuccessfulCheck.checkedAt)}`}>{exactTimeLabel(lastSuccessfulCheck.checkedAt, displayTimeZone)}</time></> : "Waiting for first verified check"}</strong></div>
               </div>
               <div className="hero-grid" aria-hidden="true" />
             </section>
@@ -394,7 +404,7 @@ export function PoolSignalApp() {
               {liveData && changeFeed?.recentChecks.length === 0 && <div className="change-empty"><strong>Waiting for the first receipt.</strong><span>The first successful WPC comparison will remain visible here until a newer successful check replaces it.</span></div>}
               {changeFeed?.recentChecks.map((check) => (
                 <article className="check-row" key={`${check.checkedAt}:${check.sourceChecksum}`}>
-                  <div className="check-time"><span className={`check-outcome ${check.outcome}`}>{check.outcome === "material_changes" ? "Changes detected" : check.outcome === "baseline" ? "Baseline" : "Verified · unchanged"}</span><strong>{exactUtcLabel(check.checkedAt)}</strong><em>successful WPC comparison</em></div>
+                  <div className="check-time"><span className={`check-outcome ${check.outcome}`}>{check.outcome === "material_changes" ? "Changes detected" : check.outcome === "baseline" ? "Baseline" : "Verified · unchanged"}</span><strong><time dateTime={canonicalUtcLabel(check.checkedAt)} title={`Canonical UTC: ${canonicalUtcLabel(check.checkedAt)}`}>{exactTimeLabel(check.checkedAt, displayTimeZone)}</time></strong><em>successful WPC comparison</em></div>
                   <div className="check-value"><span>Source records</span><strong>{countComparison(check.previousObservedRecords, check.observedRecords)}</strong><em>{check.rawSourceChanged === null ? "first retained snapshot" : check.rawSourceChanged ? "raw source payload changed" : "raw source payload matched"}</em></div>
                   <div className="check-value"><span>Fingerprints compared</span><strong>{countComparison(check.previousMonitoredRecords, check.monitoredRecords)}</strong><em>material certification fields</em></div>
                   <div className="check-value"><span>Material changes</span><strong>{check.materialChanges > 0 ? `${check.materialChanges} found` : "None"}</strong><em>{check.addedProducts} added · {check.updatedProducts} updated</em></div>
